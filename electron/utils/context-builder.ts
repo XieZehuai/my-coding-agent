@@ -47,7 +47,12 @@ export function buildInitialMessages(
 
   if (fileContents.size > 0) {
     const fileContext = Array.from(fileContents.entries())
-      .map(([f, c]) => `### File: ${f}\n\`\`\`\n${c}\n\`\`\``)
+      .map(([f, c]) => {
+        const label = c.startsWith(f + '/\n') || c.includes('\n├── ') || c.includes('\n└── ')
+          ? `### Directory: ${f}`
+          : `### File: ${f}`
+        return `${label}\n\`\`\`\n${c}\n\`\`\``
+      })
       .join('\n\n')
     messages.push({ role: 'user', content: `Referenced files:\n${fileContext}` })
     messages.push({ role: 'assistant', content: 'I have read the referenced files.' })

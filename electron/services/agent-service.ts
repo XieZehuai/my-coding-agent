@@ -1,6 +1,6 @@
 import { OpenAIClient, ChatMessage } from '../api/openai-client'
 import { TOOL_DEFINITIONS, executeTool, getPermissionCategory } from '../tools/registry'
-import { ToolCall, Message, AppConfig, ToolLogEntry } from '../../shared/types'
+import { ToolCall, Message, AppConfig, ToolLogEntry, IPC } from '../../shared/types'
 import {
   buildInitialMessages,
   countTokens,
@@ -12,6 +12,7 @@ import { renameConversation } from '../db/conversations'
 import { emitToRenderer } from '../ipc/handlers'
 import { readConfig } from '../utils/config'
 import { UndoService } from './undo-service'
+import { skillTracker } from './skill-tracker'
 
 const TOKEN_LIMIT = 120000
 const COMPRESSION_THRESHOLD = 0.9
@@ -78,6 +79,14 @@ export async function runAgentLoop(options: AgentRunOptions): Promise<void> {
   const history = listMessages(convId)
   let messages = buildInitialMessages(userContent, history, projectPath, fileContents)
 
+  // Inject tracked skill contents as system instructions (before custom command prompt)
+  const trackedSkills = skillTracker.get(convId)
+  if (trackedSkills.length > 0) {
+    for (const skill of [...trackedSkills].reverse()) {
+      messages.unshift({ role: 'system', content: skill.content })
+    }
+  }
+
   // Inject custom command prompt as system instruction
   if (customPrompt) {
     messages.unshift({ role: 'system', content: customPrompt })
@@ -86,7 +95,7 @@ export async function runAgentLoop(options: AgentRunOptions): Promise<void> {
   for (state.round = 1; state.round <= MAX_TURNS; state.round++) {
     if (signal.aborted) {
       convStatus.delete(convId)
-      emitToRenderer('agent:cancelled', { convId })
+      emitToRenderer(IPC.EVENT_CANCELLED, { convId })
       return
     }
 
@@ -94,7 +103,7 @@ export async function runAgentLoop(options: AgentRunOptions): Promise<void> {
 
     const tokenCount = countTokens(messages)
     if (tokenCount > TOKEN_LIMIT * COMPRESSION_THRESHOLD) {
-      emitToRenderer('agent:status', {
+      emitToRenderer(IPC.EVENT_STATUS, {
         convId, state: 'compressing', round: state.round,
         tokenCount, tokenLimit: TOKEN_LIMIT, tokenPercent: Math.round(tokenCount / TOKEN_LIMIT * 100),
         toolLogs: state.toolLogs, lastCompression: Date.now(),
@@ -122,7 +131,7 @@ export async function runAgentLoop(options: AgentRunOptions): Promise<void> {
         {
           onToken: (token) => {
             content += token
-            emitToRenderer('agent:token', { convId, token })
+            emitToRenderer(IPC.EVENT_TOKEN, { convId, token })
           },
           onReasoning: (token) => {
             reasoningContent += token
@@ -132,21 +141,21 @@ export async function runAgentLoop(options: AgentRunOptions): Promise<void> {
           },
           onComplete: () => {},
           onError: (error) => {
-            emitToRenderer('agent:error', { convId, error: error.message })
+            emitToRenderer(IPC.EVENT_ERROR, { convId, error: error.message })
           },
         }
       )
     } catch (e) {
       if ((e as Error).message === 'Request cancelled') {
-        emitToRenderer('agent:cancelled', { convId })
+        emitToRenderer(IPC.EVENT_CANCELLED, { convId })
         return
       }
-      emitToRenderer('agent:error', { convId, error: (e as Error).message })
+      emitToRenderer(IPC.EVENT_ERROR, { convId, error: (e as Error).message })
       return
     }
 
     if (signal.aborted) {
-      emitToRenderer('agent:cancelled', { convId })
+      emitToRenderer(IPC.EVENT_CANCELLED, { convId })
       return
     }
 
@@ -164,17 +173,17 @@ export async function runAgentLoop(options: AgentRunOptions): Promise<void> {
       if (!hasAssistantResponse(history)) {
         generateTitle(client, config, convId, messages, content, signal)
       }
-  emitToRenderer('agent:token', {
+  emitToRenderer(IPC.EVENT_TOKEN, {
     convId,
     token: `\n\n> ⚠️ 已达到最大对话轮次（${MAX_TURNS}轮），对话自动结束。如需继续，请发送新消息。`,
   })
-  emitToRenderer('agent:complete', { convId })
+  emitToRenderer(IPC.EVENT_COMPLETE, { convId })
       return
     }
 
     for (const tc of toolCalls) {
       if (signal.aborted) {
-        emitToRenderer('agent:cancelled', { convId })
+        emitToRenderer(IPC.EVENT_CANCELLED, { convId })
         return
       }
 
@@ -182,21 +191,21 @@ export async function runAgentLoop(options: AgentRunOptions): Promise<void> {
       const args = JSON.parse(tc.function.arguments || '{}') as Record<string, unknown>
       const askId = tc.id
 
-      emitToRenderer('agent:tool-start', { convId, toolName, toolCallId: tc.id, args })
+      emitToRenderer(IPC.EVENT_TOOL_START, { convId, toolName, toolCallId: tc.id, args })
 
       const category = getPermissionCategory(toolName)
       const permission = convTrustMode.get(convId) ? 'always' : config.permissions[category]
 
       if (permission === 'deny') {
         const errMsg = `Permission denied for ${toolName}`
-        emitToRenderer('agent:tool-error', { convId, toolCallId: tc.id, error: errMsg })
+        emitToRenderer(IPC.EVENT_TOOL_ERROR, { convId, toolCallId: tc.id, error: errMsg })
         saveToolMessage(convId, errMsg, tc.id)
         messages.push({ role: 'tool', content: errMsg, tool_call_id: tc.id })
         continue
       }
 
       if (permission === 'ask') {
-        emitToRenderer('agent:ask', {
+        emitToRenderer(IPC.EVENT_ASK, {
           convId,
           askId,
           toolName,
@@ -206,7 +215,7 @@ export async function runAgentLoop(options: AgentRunOptions): Promise<void> {
         const approved = await waitForConfirmation(askId, signal)
         if (!approved) {
           const errMsg = `User denied permission for ${toolName}`
-          emitToRenderer('agent:tool-error', { convId, toolCallId: tc.id, error: errMsg })
+          emitToRenderer(IPC.EVENT_TOOL_ERROR, { convId, toolCallId: tc.id, error: errMsg })
           saveToolMessage(convId, errMsg, tc.id)
           messages.push({ role: 'tool', content: errMsg, tool_call_id: tc.id })
           continue
@@ -228,12 +237,12 @@ export async function runAgentLoop(options: AgentRunOptions): Promise<void> {
       state.toolLogs.push(logEntry)
 
       if (result.error) {
-        emitToRenderer('agent:tool-error', { convId, toolCallId: tc.id, error: result.error })
+        emitToRenderer(IPC.EVENT_TOOL_ERROR, { convId, toolCallId: tc.id, error: result.error })
       } else {
         const displayContent = result.content.length > 5000
           ? result.content.substring(0, 5000) + `\n... (truncated, ${result.content.length} chars total)`
           : result.content
-        emitToRenderer('agent:tool-end', { convId, toolCallId: tc.id, result: displayContent })
+        emitToRenderer(IPC.EVENT_TOOL_END, { convId, toolCallId: tc.id, result: displayContent })
       }
 
       saveToolMessage(convId, result.content, tc.id)
@@ -241,7 +250,7 @@ export async function runAgentLoop(options: AgentRunOptions): Promise<void> {
     }
   }
 
-  emitToRenderer('agent:complete', { convId })
+  emitToRenderer(IPC.EVENT_COMPLETE, { convId })
 }
 
 const pendingConfirmations = new Map<string, { resolve: (approved: boolean) => void }>()
@@ -319,7 +328,7 @@ async function generateTitle(
 
     const title = result.content?.trim().substring(0, 15) || '未命名'
     renameConversation(convId, title)
-    emitToRenderer('agent:title-generated', { convId, title })
+    emitToRenderer(IPC.EVENT_TITLE_GENERATED, { convId, title })
   } catch {
     // Title generation failure is non-critical
   }
@@ -344,5 +353,5 @@ function emitStatus(
     lastCompression: null,
   }
   convStatus.set(convId, snapshot)
-  emitToRenderer('agent:status', snapshot)
+  emitToRenderer(IPC.EVENT_STATUS, snapshot)
 }

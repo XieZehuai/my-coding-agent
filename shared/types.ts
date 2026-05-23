@@ -206,6 +206,7 @@ export const IPC = {
   // File
   FILE_SEARCH: 'file:search',
   COMMAND_SEARCH: 'command:search',
+  SKILL_SEARCH: 'skill:search',
 
   // Config
   CONFIG_READ: 'config:read',

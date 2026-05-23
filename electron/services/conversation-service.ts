@@ -10,6 +10,7 @@ import { listMessages } from '../db/messages'
 import { getProject } from '../db/projects'
 import { getDb } from '../db/connection'
 import { UndoService } from './undo-service'
+import { skillTracker } from './skill-tracker'
 import { ConversationExport, Conversation } from '../../shared/types'
 
 export function listProjectConversations(projectId: string) {
@@ -29,6 +30,7 @@ export function removeConversation(id: string) {
       undo.cleanup()
     }
   }
+  skillTracker.clear(id)
   deleteConversation(id)
 }
 

@@ -5,6 +5,7 @@ export const LAYOUT_DEFAULTS = {
   sidebarWidth: 280,
   inputHeight: 120,
   devPanelWidth: 280,
+  devPanelVisible: true,
 } as const
 
 export const LAYOUT_CONSTRAINTS = {
@@ -22,10 +23,18 @@ function loadNumber(key: string, fallback: number): number {
   return fallback
 }
 
+function loadBoolean(key: string, fallback: boolean): boolean {
+  const raw = localStorage.getItem(`layout:${key}`)
+  if (raw === 'true') return true
+  if (raw === 'false') return false
+  return fallback
+}
+
 export const useLayoutStore = defineStore('layout', () => {
   const sidebarWidth = ref(loadNumber('sidebarWidth', LAYOUT_DEFAULTS.sidebarWidth))
   const inputHeight = ref(loadNumber('inputHeight', LAYOUT_DEFAULTS.inputHeight))
-  const devPanelWidth = ref(loadNumber('devPanelHeight', LAYOUT_DEFAULTS.devPanelWidth))
+  const devPanelWidth = ref(loadNumber('devPanelWidth', LAYOUT_DEFAULTS.devPanelWidth))
+  const devPanelVisible = ref(loadBoolean('devPanelVisible', LAYOUT_DEFAULTS.devPanelVisible))
 
   watch(sidebarWidth, (val) => {
     localStorage.setItem('layout:sidebarWidth', String(val))
@@ -36,7 +45,11 @@ export const useLayoutStore = defineStore('layout', () => {
   })
 
   watch(devPanelWidth, (val) => {
-    localStorage.setItem('layout:devPanelHeight', String(val))
+    localStorage.setItem('layout:devPanelWidth', String(val))
+  })
+
+  watch(devPanelVisible, (val) => {
+    localStorage.setItem('layout:devPanelVisible', String(val))
   })
 
   function clampOnMount() {
@@ -47,5 +60,5 @@ export const useLayoutStore = defineStore('layout', () => {
     devPanelWidth.value = Math.min(devPanelWidth.value, Math.max(LAYOUT_CONSTRAINTS.devPanel.min, vw * LAYOUT_CONSTRAINTS.devPanel.maxVw))
   }
 
-  return { sidebarWidth, inputHeight, devPanelWidth, clampOnMount }
+  return { sidebarWidth, inputHeight, devPanelWidth, devPanelVisible, clampOnMount }
 })

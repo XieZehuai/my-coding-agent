@@ -15,7 +15,7 @@
         <span class="item-icon">&#128172;</span>
         <div class="item-content">
           <span v-if="renamingId !== conv.id" class="item-label">{{ conv.title }}</span>
-          <input v-else ref="renameInput" v-model="renameValue" class="rename-input"
+          <input v-else :ref="(el: any) => renameInput = el" v-model="renameValue" class="rename-input"
             @blur="finishRename(conv.id)" @keydown.enter="finishRename(conv.id)"
             @keydown.escape="cancelRename" @click.stop />
           <span class="item-date">{{ formatDate(conv.updatedAt) }}</span>
@@ -47,7 +47,7 @@ const chatStore = useChatStore()
 const contextMenu = reactive({ visible: false, x: 0, y: 0, convId: null as string | null })
 const renamingId = ref<string | null>(null)
 const renameValue = ref('')
-const renameInput = ref<HTMLInputElement | null>(null)
+let renameInput: HTMLInputElement | null = null
 
 function showContextMenu(id: string, event: MouseEvent) {
   contextMenu.visible = true; contextMenu.x = event.clientX; contextMenu.y = event.clientY; contextMenu.convId = id
@@ -64,7 +64,7 @@ async function handleExport() { if (contextMenu.convId) await window.api.exportC
 async function handleImport() { if (projectStore.selectedProjectId) { await window.api.importConversation(projectStore.selectedProjectId); await convStore.loadConversations() } hideContextMenu() }
 
 async function startRename(conv: { id: string; title: string }) {
-  renamingId.value = conv.id; renameValue.value = conv.title; await nextTick(); renameInput.value?.focus(); renameInput.value?.select()
+  renamingId.value = conv.id; renameValue.value = conv.title; await nextTick(); renameInput?.focus(); renameInput?.select()
 }
 async function finishRename(id: string) {
   if (renamingId.value === id) { const t = renameValue.value.trim() || '未命名'; await convStore.renameConversation(id, t); renamingId.value = null }

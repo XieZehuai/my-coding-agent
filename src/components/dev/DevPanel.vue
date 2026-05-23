@@ -2,7 +2,7 @@
   <div
     class="dev-panel"
     :style="{
-      width: isVisible ? layoutStore.devPanelWidth + 'px' : '0px',
+      width: layoutStore.devPanelVisible ? layoutStore.devPanelWidth + 'px' : '0px',
     }"
   >
     <ResizeHandle
@@ -14,7 +14,7 @@
     <div class="panel-inner">
       <div class="panel-header">
         <span>Developer Panel</span>
-        <button class="close-btn" @click="isVisible = false">&times;</button>
+        <button class="close-btn" @click="layoutStore.devPanelVisible = false">&times;</button>
       </div>
       <div class="panel-body">
         <div class="panel-section">
@@ -52,7 +52,6 @@ interface DevStatus { convId: string; state: string; round: number; maxTurns: nu
 
 const layoutStore = useLayoutStore()
 
-const isVisible = ref(true)
 const status = ref<DevStatus>({ convId: '', state: 'idle', round: 0, maxTurns: 50, tokenCount: 0, tokenLimit: 120000, tokenPercent: 0, toolLogs: [], lastCompression: null })
 
 const devPanelResize = useResizable({
@@ -66,7 +65,12 @@ const devPanelResize = useResizable({
   invert: true,
 })
 
-function handleKeydown(e: KeyboardEvent) { if (e.ctrlKey && e.key === 'd') { e.preventDefault(); isVisible.value = !isVisible.value } }
+function handleKeydown(e: KeyboardEvent) {
+  if (e.ctrlKey && e.key === 'd') {
+    e.preventDefault()
+    layoutStore.devPanelVisible = !layoutStore.devPanelVisible
+  }
+}
 
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown)

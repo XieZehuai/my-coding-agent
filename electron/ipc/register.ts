@@ -21,6 +21,7 @@ import { resolveConfirmation, setTrustMode, getAgentStatus } from '../services/a
 import { sendChatMessage, cancelChat } from '../services/chat-service'
 import { searchFiles } from '../services/file-service'
 import { searchCommands } from '../services/command-service'
+import { searchSkills } from '../services/skill-service'
 import * as fs from 'fs'
 
 export function registerAllHandlers() {
@@ -119,6 +120,10 @@ export function registerAllHandlers() {
 
   registerHandler(IPC.COMMAND_SEARCH, async (_event, projectPath: string, query: string) => {
     return searchCommands(projectPath, query)
+  })
+
+  registerHandler(IPC.SKILL_SEARCH, async (_event, projectPath: string, query: string) => {
+    return searchSkills(projectPath, query)
   })
 
   // ============================================================
