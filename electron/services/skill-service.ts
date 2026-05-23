@@ -37,10 +37,17 @@ export function searchSkills(projectPath: string, query: string): SkillInfo[] {
 }
 
 function parseFrontmatter(content: string): { name: string; description: string } {
-  const lines = content.split('\n')
+  const cleaned = content.replace(/^\uFEFF/, '')
+  const lines = cleaned.split(/\r?\n/)
   if (lines[0]?.trim() !== '---') return { name: '', description: '' }
 
-  const endIdx = lines.findIndex((line, i) => i > 0 && line.trim() === '---')
+  let endIdx = -1
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i].trim() === '---') {
+      endIdx = i
+      break
+    }
+  }
   if (endIdx === -1) return { name: '', description: '' }
 
   let name = ''
@@ -54,9 +61,9 @@ function parseFrontmatter(content: string): { name: string; description: string 
     const key = line.substring(0, colonIdx).trim()
     const value = line.substring(colonIdx + 1).trim()
 
-    if (key === 'name' && value) {
+    if (key === 'name' && value.length > 0) {
       name = value
-    } else if (key === 'description' && value) {
+    } else if (key === 'description' && value.length > 0) {
       description = value
     }
   }

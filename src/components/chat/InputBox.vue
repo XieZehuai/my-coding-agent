@@ -102,7 +102,6 @@ watch(
 );
 
 async function handleInput() {
-  console.log('[handleInput] called, text:', JSON.stringify(inputText.value));
   const el = textareaRef.value;
   if (el) {
     el.style.height = "auto";
@@ -123,17 +122,10 @@ async function handleInput() {
     fileResults.value = [];
     fileSelectedIndex.value = 0;
     const project = projectStore.selectedProject;
-    console.log('[handleInput] atMatch detected, project:', project?.path, 'query:', atMatch[1]);
     if (project) {
       try {
-        const results = await window.api.searchFiles(project.path, atMatch[1]);
-        console.log('[handleInput] searchFiles results:', results.length, 'showFileSearch:', showFileSearch.value);
-        fileResults.value = results;
-        await nextTick();
-        console.log('[handleInput] after nextTick, fileResults.length:', fileResults.value.length, 'showFileSearch:', showFileSearch.value);
-      } catch (e) {
-        console.error('[handleInput] searchFiles error:', e);
-      }
+        fileResults.value = await window.api.searchFiles(project.path, atMatch[1]);
+      } catch {}
     }
   } else if (cmdMatch) {
     showCmdSearch.value = true;
@@ -291,6 +283,7 @@ async function handleCancel() {
   display: flex;
   flex-direction: column;
   border-top: 1px solid var(--border);
+  position: relative;
 }
 .status-bar {
   padding: 4px 20px 0;

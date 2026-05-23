@@ -105,6 +105,5 @@ function toggleTrust() {
 .input-wrapper {
   flex-shrink: 0;
   min-height: 165px;
-  overflow: hidden;
 }
 </style>
