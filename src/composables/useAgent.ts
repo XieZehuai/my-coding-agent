@@ -2,6 +2,7 @@ import { useChatStore } from "../stores/chat";
 import { useConversationStore } from "../stores/conversation";
 import { useTrustModeStore } from "../stores/trustMode";
 import { useProjectStore } from "../stores/project";
+import { IPC } from "@shared/types";
 
 export function useAgent() {
   const chatStore = useChatStore();
@@ -9,7 +10,28 @@ export function useAgent() {
   const trustStore = useTrustModeStore();
   const projectStore = useProjectStore();
 
+  const eventChannels = [
+    IPC.EVENT_TOKEN,
+    IPC.EVENT_REASONING,
+    IPC.EVENT_TOOL_START,
+    IPC.EVENT_TOOL_END,
+    IPC.EVENT_TOOL_ERROR,
+    IPC.EVENT_ASK,
+    IPC.EVENT_COMPLETE,
+    IPC.EVENT_CANCELLED,
+    IPC.EVENT_ERROR,
+    IPC.EVENT_STATUS,
+    IPC.EVENT_TITLE_GENERATED,
+  ];
+
+  function teardownListeners() {
+    for (const channel of eventChannels) {
+      window.api.removeAllListeners(channel);
+    }
+  }
+
   function setupListeners(convId: string) {
+    teardownListeners();
     window.api.onToken((data) => {
       if (data.convId === convId) {
         chatStore.appendToken(data.token);

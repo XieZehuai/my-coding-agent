@@ -13,12 +13,15 @@
 
       <div v-if="chatStore.isActive" class="message assistant streaming-panel">
         <div class="message-header">
-          <span class="message-role">Agent</span>
-          <span class="message-live-badge">Streaming</span>
+          <div class="header-left">
+            <span class="message-role">Agent</span>
+            <span class="message-live-badge">Streaming</span>
+            <span class="message-live-timer">{{ elapsedTime }}</span>
+          </div>
         </div>
         <div class="message-content">
           <div
-            v-if="chatStore.streamingSegments.length === 0 && !chatStore.streamingReasoning"
+            v-if="chatStore.streamingSegments.length === 0"
             class="waiting-indicator"
           >
             <span class="waiting-dots"
@@ -26,16 +29,16 @@
             ></span>
             <span class="waiting-text">Waiting for response</span>
           </div>
-          <details v-if="chatStore.streamingReasoning" class="reasoning-block streaming" :open="!hasTextStream">
-            <summary class="reasoning-header">
-              <span class="reasoning-dot"></span>
-              <span class="reasoning-label">Thinking</span>
-              <span class="reasoning-live-badge">live</span>
-            </summary>
-            <div class="reasoning-body markdown-body" v-html="renderMarkdown(chatStore.streamingReasoning)"></div>
-          </details>
           <template v-for="(seg, i) in chatStore.streamingSegments" :key="i">
-            <div v-if="seg.type === 'text'" class="markdown-body" v-html="renderMarkdown(seg.content)"></div>
+            <details v-if="seg.type === 'reasoning'" class="reasoning-block streaming" open>
+              <summary class="reasoning-header">
+                <span class="reasoning-dot"></span>
+                <span class="reasoning-label">Thinking</span>
+                <span class="reasoning-live-badge">live</span>
+              </summary>
+              <div class="reasoning-body markdown-body" v-html="renderMarkdown(seg.content)"></div>
+            </details>
+            <div v-else-if="seg.type === 'text'" class="markdown-body" v-html="renderMarkdown(seg.content)"></div>
             <div v-else-if="seg.type === 'tool_call'" :class="['inline-tool', seg.toolCall.status]">
               <div class="tool-header">
                 <span class="tool-status-dot" :data-status="seg.toolCall.status"></span>
@@ -58,7 +61,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, computed } from "vue";
+import { ref, watch, nextTick, computed, onBeforeUnmount } from "vue";
 import { marked } from "marked";
 import { useConversationStore } from "../../stores/conversation";
 import { useChatStore } from "../../stores/chat";
@@ -69,6 +72,36 @@ marked.setOptions({ breaks: true, gfm: true });
 const convStore = useConversationStore();
 const chatStore = useChatStore();
 const listRef = ref<HTMLElement | null>(null);
+
+const elapsedTime = ref("0s");
+let timerInterval: ReturnType<typeof setInterval> | null = null;
+
+function updateElapsed() {
+  if (chatStore.responseStartTime != null) {
+    const ms = Date.now() - chatStore.responseStartTime;
+    if (ms < 1000) elapsedTime.value = `${ms}ms`;
+    else elapsedTime.value = `${(ms / 1000).toFixed(1)}s`;
+  }
+}
+
+watch(
+  () => chatStore.isActive,
+  (active) => {
+    if (active) {
+      elapsedTime.value = "0s";
+      timerInterval = setInterval(updateElapsed, 100);
+    } else {
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+    }
+  }
+);
+
+onBeforeUnmount(() => {
+  if (timerInterval) clearInterval(timerInterval);
+});
 
 const hasTextStream = computed(() =>
   chatStore.streamingSegments.some((s) => s.type === "text" && s.content.length > 0)
@@ -138,6 +171,11 @@ watch(
   justify-content: space-between;
   margin-bottom: 6px;
 }
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .message-role {
   font-size: 11px;
   font-weight: 600;
@@ -154,6 +192,14 @@ watch(
   border-radius: 3px;
   background: color-mix(in srgb, var(--success) 15%, transparent);
   animation: pulse-badge 1.5s ease-in-out infinite;
+}
+.message-live-timer {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: "Consolas", "Courier New", monospace;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--bg-tertiary);
 }
 @keyframes pulse-badge {
   0%,

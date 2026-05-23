@@ -27,7 +27,12 @@ export interface ToolSegment {
   toolCall: ToolCallSegment;
 }
 
-export type Segment = ContentSegment | ToolSegment;
+export interface ReasoningSegment {
+  type: "reasoning";
+  content: string;
+}
+
+export type Segment = ContentSegment | ToolSegment | ReasoningSegment;
 
 export interface DisplayMessage {
   id: string;
@@ -35,7 +40,7 @@ export interface DisplayMessage {
   role: string;
   segments: Segment[];
   createdAt: number;
-  reasoningContent?: string;
+  duration?: number;
 }
 
 export const useChatStore = defineStore("chat", () => {
@@ -43,7 +48,7 @@ export const useChatStore = defineStore("chat", () => {
   const state = ref<AgentState>("idle");
   const lastError = ref<string | null>(null);
   const streamingSegments = ref<Segment[]>([]);
-  const streamingReasoning = ref("");
+  const responseStartTime = ref<number | null>(null);
   const pendingAsk = ref<AskInfo | null>(null);
   const loadingMessages = ref(false);
 
@@ -65,11 +70,16 @@ export const useChatStore = defineStore("chat", () => {
     state.value = "streaming";
     lastError.value = null;
     streamingSegments.value = [];
-    streamingReasoning.value = "";
+    responseStartTime.value = Date.now();
   }
 
   function appendReasoning(token: string) {
-    streamingReasoning.value += token;
+    const last = streamingSegments.value[streamingSegments.value.length - 1];
+    if (last && last.type === "reasoning") {
+      last.content += token;
+    } else {
+      streamingSegments.value.push({ type: "reasoning", content: token });
+    }
   }
 
   function appendToken(token: string) {
@@ -106,6 +116,7 @@ export const useChatStore = defineStore("chat", () => {
 
   function finishStreaming() {
     const hasContent = streamingSegments.value.some((s) => (s.type === "text" ? s.content.length > 0 : true));
+    const duration = responseStartTime.value != null ? Date.now() - responseStartTime.value : undefined;
 
     if (hasContent) {
       messages.value.push({
@@ -114,12 +125,12 @@ export const useChatStore = defineStore("chat", () => {
         role: "assistant",
         segments: [...streamingSegments.value],
         createdAt: Date.now(),
-        reasoningContent: streamingReasoning.value || undefined,
+        duration,
       });
     }
     state.value = "completed";
     streamingSegments.value = [];
-    streamingReasoning.value = "";
+    responseStartTime.value = null;
   }
 
   function cancelStreaming() {
@@ -152,15 +163,24 @@ export const useChatStore = defineStore("chat", () => {
     const result: DisplayMessage[] = [];
     const toolResults = new Map<string, string>();
 
+    raw
+      .filter((msg) => msg.role === "tool")
+      .forEach((msg) => {
+        toolResults.set(msg.toolCallId || "", msg.content);
+      });
+
     for (const msg of raw) {
       if (msg.role === "tool") {
-        toolResults.set(msg.toolCallId || "", msg.content);
         continue;
       }
 
       if (msg.role === "assistant" && result.length > 0) {
         const last = result[result.length - 1];
         if (last.role === "assistant") {
+          // Append reasoning as segment (legacy compat: reasoning before new content)
+          if (msg.reasoningContent) {
+            last.segments.push({ type: "reasoning", content: msg.reasoningContent });
+          }
           // Append text segment
           if (msg.content) {
             const lastSeg = last.segments[last.segments.length - 1];
@@ -173,14 +193,14 @@ export const useChatStore = defineStore("chat", () => {
           // Append tool call segments
           if (msg.toolCalls) {
             for (const tc of msg.toolCalls) {
-              const result = toolResults.get(tc.id);
+              const toolResult = toolResults.get(tc.id);
               last.segments.push({
                 type: "tool_call",
                 toolCall: {
                   id: tc.id,
                   name: tc.function.name,
                   args: tc.function.arguments,
-                  result: result || undefined,
+                  result: toolResult || undefined,
                   status: "done",
                 },
               });
@@ -192,19 +212,22 @@ export const useChatStore = defineStore("chat", () => {
 
       // Start a new display message
       const segments: Segment[] = [];
+      if (msg.reasoningContent) {
+        segments.push({ type: "reasoning", content: msg.reasoningContent });
+      }
       if (msg.content) {
         segments.push({ type: "text", content: msg.content });
       }
       if (msg.toolCalls) {
         for (const tc of msg.toolCalls) {
-          const result = toolResults.get(tc.id);
+          const toolResult = toolResults.get(tc.id);
           segments.push({
             type: "tool_call",
             toolCall: {
               id: tc.id,
               name: tc.function.name,
               args: tc.function.arguments,
-              result: result || undefined,
+              result: toolResult || undefined,
               status: "done",
             },
           });
@@ -217,7 +240,6 @@ export const useChatStore = defineStore("chat", () => {
         role: msg.role,
         segments,
         createdAt: msg.createdAt,
-        reasoningContent: msg.reasoningContent || undefined,
       });
     }
 
@@ -240,7 +262,7 @@ export const useChatStore = defineStore("chat", () => {
     isActive,
     lastError,
     streamingSegments,
-    streamingReasoning,
+    responseStartTime,
     pendingAsk,
     loadingMessages,
     hasMessages,

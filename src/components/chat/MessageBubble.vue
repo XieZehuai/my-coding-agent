@@ -1,42 +1,77 @@
 <template>
   <div :class="['message', message.role]">
     <div class="message-header">
-      <span class="message-role">{{ message.role === "user" ? "You" : "Agent" }}</span>
+      <div class="header-left">
+        <span class="message-role">{{ message.role === "user" ? "You" : "Agent" }}</span>
+        <span v-if="isAssistant && message.duration != null" class="message-duration">{{
+          formatDuration(message.duration)
+        }}</span>
+      </div>
       <span class="message-time">{{ formatTime(message.createdAt) }}</span>
     </div>
+
     <div class="message-content">
-      <details v-if="message.reasoningContent" class="reasoning-block">
-        <summary class="reasoning-header">
-          <span class="reasoning-dot"></span>
-          <span class="reasoning-label">Thinking</span>
-        </summary>
-        <div class="reasoning-body markdown-body" v-html="renderMarkdown(message.reasoningContent)"></div>
-      </details>
-      <template v-for="(seg, i) in message.segments" :key="i">
-        <div v-if="seg.type === 'text'" class="markdown-body" v-html="renderMarkdown(seg.content)"></div>
-        <div v-else-if="seg.type === 'tool_call'" :class="['tool-call-item', seg.toolCall.status]">
-          <details :open="seg.toolCall.status === 'error'">
-            <summary class="tool-header">
-              <span class="tool-status-dot" :data-status="seg.toolCall.status"></span>
-              <span class="tool-name">{{ seg.toolCall.name }}</span>
-              <span class="tool-status-label">{{ statusLabel(seg.toolCall.status) }}</span>
-              <span class="tool-args-preview">{{ formatArgs(seg.toolCall.args) }}</span>
-            </summary>
-            <div class="tool-body">
-              <div class="tool-section">
-                <span class="tool-label">Arguments</span>
-                <pre>{{ prettyArgs(seg.toolCall.args) }}</pre>
+      <!-- User message: simple text rendering -->
+      <template v-if="message.role !== 'assistant'">
+        <template v-for="(seg, i) in message.segments" :key="i">
+          <div v-if="seg.type === 'text'" class="markdown-body" v-html="renderMarkdown(seg.content)"></div>
+        </template>
+      </template>
+
+      <!-- Assistant message: work process + result split -->
+      <template v-else>
+        <div v-if="hasWorkProcess" class="work-process">
+          <div :class="['work-process-header', { collapsed: !workExpanded }]" @click="workExpanded = !workExpanded">
+            <span class="work-toggle">{{ workExpanded ? "▾" : "▸" }}</span>
+            <span class="work-label">Work Process</span>
+            <span class="work-count">{{ stepCount }} {{ stepCount === 1 ? "step" : "steps" }}</span>
+          </div>
+          <div v-show="workExpanded" class="work-process-body">
+            <template v-for="(seg, i) in workSegments" :key="i">
+              <details v-if="seg.type === 'reasoning'" class="reasoning-block">
+                <summary class="reasoning-header">
+                  <span class="reasoning-dot"></span>
+                  <span class="reasoning-label">Thinking</span>
+                </summary>
+                <div class="reasoning-body markdown-body" v-html="renderMarkdown(seg.content)"></div>
+              </details>
+              <div
+                v-else-if="seg.type === 'text'"
+                class="markdown-body work-text"
+                v-html="renderMarkdown(seg.content)"
+              ></div>
+              <div v-else-if="seg.type === 'tool_call'" :class="['tool-call-item', seg.toolCall.status]">
+                <details :open="seg.toolCall.status === 'error'">
+                  <summary class="tool-header">
+                    <span class="tool-status-dot" :data-status="seg.toolCall.status"></span>
+                    <span class="tool-name">{{ seg.toolCall.name }}</span>
+                    <span class="tool-status-label">{{ statusLabel(seg.toolCall.status) }}</span>
+                    <span class="tool-args-preview">{{ formatArgs(seg.toolCall.args) }}</span>
+                  </summary>
+                  <div class="tool-body">
+                    <div class="tool-section">
+                      <span class="tool-label">Arguments</span>
+                      <pre>{{ prettyArgs(seg.toolCall.args) }}</pre>
+                    </div>
+                    <div v-if="seg.toolCall.result" class="tool-section">
+                      <span class="tool-label">Result</span>
+                      <pre>{{ seg.toolCall.result }}</pre>
+                    </div>
+                    <div v-if="seg.toolCall.error" class="tool-section error-section">
+                      <span class="tool-label">Error</span>
+                      <pre class="tool-error-text">{{ seg.toolCall.error }}</pre>
+                    </div>
+                  </div>
+                </details>
               </div>
-              <div v-if="seg.toolCall.result" class="tool-section">
-                <span class="tool-label">Result</span>
-                <pre>{{ seg.toolCall.result }}</pre>
-              </div>
-              <div v-if="seg.toolCall.error" class="tool-section error-section">
-                <span class="tool-label">Error</span>
-                <pre class="tool-error-text">{{ seg.toolCall.error }}</pre>
-              </div>
-            </div>
-          </details>
+            </template>
+          </div>
+        </div>
+
+        <div v-if="hasResult" class="result-section">
+          <template v-for="(seg, i) in resultSegments" :key="i">
+            <div v-if="seg.type === 'text'" class="markdown-body" v-html="renderMarkdown(seg.content)"></div>
+          </template>
         </div>
       </template>
     </div>
@@ -44,11 +79,39 @@
 </template>
 
 <script setup lang="ts">
+import { ref, computed } from "vue";
 import { marked } from "marked";
-import type { DisplayMessage } from "../../stores/chat";
+import type { DisplayMessage, Segment } from "../../stores/chat";
 
 marked.setOptions({ breaks: true, gfm: true });
+
 const props = defineProps<{ message: DisplayMessage }>();
+const workExpanded = ref(false);
+
+const isAssistant = computed(() => props.message.role === "assistant");
+
+function splitSegments(segments: Segment[]): { workSegments: Segment[]; resultSegments: Segment[] } {
+  let splitIdx = segments.length;
+  while (splitIdx > 0 && segments[splitIdx - 1].type === "text") {
+    splitIdx--;
+  }
+
+  return {
+    workSegments: segments.slice(0, splitIdx),
+    resultSegments: segments.slice(splitIdx),
+  };
+}
+
+const splitResult = computed(() => splitSegments(props.message.segments));
+
+const workSegments = computed(() => splitResult.value.workSegments);
+const resultSegments = computed(() => splitResult.value.resultSegments);
+const hasWorkProcess = computed(() => workSegments.value.length > 0);
+const hasResult = computed(() => resultSegments.value.length > 0);
+
+const stepCount = computed(() => {
+  return workSegments.value.filter((s) => s.type === "tool_call").length;
+});
 
 function renderMarkdown(text: string): string {
   if (!text) return "";
@@ -59,6 +122,11 @@ function formatTime(ts: number): string {
   const d = new Date(ts);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
 }
 
 function statusLabel(status: string): string {
@@ -108,12 +176,25 @@ function formatArgs(args: string): string {
   justify-content: space-between;
   padding: 8px 16px 4px;
 }
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .message-role {
   font-size: 11px;
   font-weight: 600;
   color: var(--accent);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+.message-duration {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: "Consolas", "Courier New", monospace;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--bg-tertiary);
 }
 .message-time {
   font-size: 10px;
@@ -128,6 +209,60 @@ function formatArgs(args: string): string {
   color: var(--text-primary);
 }
 
+/* Work Process Section */
+.work-process {
+  margin-bottom: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.work-process-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 12px;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg-primary));
+}
+
+.work-process-header:hover {
+  background: var(--bg-hover);
+}
+.work-toggle {
+  font-size: 10px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.work-label {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.work-count {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.work-process-body {
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg-primary));
+}
+.work-text {
+  margin: 4px 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+/* Result Section */
+.result-section {
+  padding-top: 0;
+}
+
+/* Markdown content styles */
 .message-content :deep(h1),
 .message-content :deep(h2),
 .message-content :deep(h3),
@@ -148,11 +283,9 @@ function formatArgs(args: string): string {
 .message-content :deep(h4) {
   font-size: 0.95em;
 }
-
 .message-content :deep(p) {
   margin: 4px 0;
 }
-
 .message-content :deep(a) {
   color: var(--accent);
   text-decoration: underline;
@@ -161,13 +294,11 @@ function formatArgs(args: string): string {
 .message-content :deep(a:hover) {
   opacity: 0.8;
 }
-
 .message-content :deep(hr) {
   border: none;
   border-top: 1px solid var(--border);
   margin: 12px 0;
 }
-
 .message-content :deep(code) {
   background: var(--code-bg);
   padding: 2px 6px;
@@ -218,7 +349,6 @@ function formatArgs(args: string): string {
   background: var(--bg-tertiary);
   font-weight: 600;
 }
-
 .message-content :deep(img) {
   max-width: 100%;
   border-radius: 4px;
@@ -232,7 +362,7 @@ function formatArgs(args: string): string {
 
 /* Reasoning/Thinking block */
 .reasoning-block {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
   overflow: hidden;
