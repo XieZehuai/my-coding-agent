@@ -114,9 +114,14 @@ export function sendChatMessage(convId: string, content: string, trustMode: bool
     trustMode,
     customPrompt,
   });
-  agent.start().finally(() => {
-    agentControllers.delete(convId);
-  });
+  agent
+    .start()
+    .catch((e) => {
+      emitToRenderer(IPC.EVENT_ERROR, { convId, error: (e as Error).message || String(e) });
+    })
+    .finally(() => {
+      agentControllers.delete(convId);
+    });
 }
 
 export function cancelChat(convId: string): boolean {

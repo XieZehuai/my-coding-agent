@@ -203,8 +203,17 @@ export class AgentLoop {
     }
 
     const toolName = tool.function.name;
-    const args = parseToolArguments(tool.function.arguments);
     const tcId = tool.id;
+    const parsed = parseToolArguments(tool.function.arguments);
+
+    if (!parsed.ok) {
+      this.ctx.pendingTools.shift();
+      emitToRenderer(IPC.EVENT_TOOL_START, { convId: this.ctx.convId, toolName, toolCallId: tcId, args: {} });
+      this.recordToolFailure(toolName, tcId, parsed.error);
+      return;
+    }
+
+    const args = parsed.args;
 
     emitToRenderer(IPC.EVENT_TOOL_START, { convId: this.ctx.convId, toolName, toolCallId: tcId, args });
 
@@ -260,7 +269,14 @@ export class AgentLoop {
       saveToolMessage(this.ctx.convId, errMsg, askId);
       this.ctx.messages.push({ role: "tool", content: errMsg, tool_call_id: askId });
     } else {
-      const args = parseToolArguments(tool.function.arguments);
+      const parsed = parseToolArguments(tool.function.arguments);
+      if (!parsed.ok) {
+        this.recordToolFailure(tool.function.name, tool.id, parsed.error);
+        this.ctx.pendingAskId = null;
+        return this.transition("executing_tools");
+      }
+
+      const args = parsed.args;
       await this.executeOneTool(tool.function.name, args, tool.id);
     }
 
@@ -273,6 +289,7 @@ export class AgentLoop {
   private async executeOneTool(toolName: string, args: Record<string, unknown>, tcId: string): Promise<void> {
     const startTime = Date.now();
     const result = await executeTool(toolName, args, this.ctx.projectPath, this.ctx.undoService.getBackupCallback());
+    const messageContent = result.error || result.content;
 
     const duration = Date.now() - startTime;
     const logEntry: ToolLogEntry = {
@@ -300,8 +317,24 @@ export class AgentLoop {
       emitToRenderer(IPC.EVENT_TOOL_END, { convId: this.ctx.convId, toolCallId: tcId, result: displayContent });
     }
 
-    saveToolMessage(this.ctx.convId, result.content, tcId);
-    this.ctx.messages.push({ role: "tool", content: result.content, tool_call_id: tcId });
+    saveToolMessage(this.ctx.convId, messageContent, tcId);
+    this.ctx.messages.push({ role: "tool", content: messageContent, tool_call_id: tcId });
+  }
+
+  private recordToolFailure(toolName: string, tcId: string, error: string): void {
+    const content = error;
+    this.ctx.toolLogs.push({
+      timestamp: Date.now(),
+      toolName,
+      target: "",
+      duration: 0,
+      status: "error",
+      error,
+    });
+
+    emitToRenderer(IPC.EVENT_TOOL_ERROR, { convId: this.ctx.convId, toolCallId: tcId, error });
+    saveToolMessage(this.ctx.convId, content, tcId);
+    this.ctx.messages.push({ role: "tool", content, tool_call_id: tcId });
   }
 
   private nextRound(): void {
@@ -413,22 +446,33 @@ export class AgentLoop {
   }
 }
 
-function parseToolArguments(raw: string | undefined): Record<string, unknown> {
+type ParsedToolArguments = { ok: true; args: Record<string, unknown> } | { ok: false; error: string };
+
+function parseToolArguments(raw: string | undefined): ParsedToolArguments {
   try {
-    return JSON.parse(raw || "{}") as Record<string, unknown>;
+    return { ok: true, args: JSON.parse(raw || "{}") as Record<string, unknown> };
   } catch {
-    throw new Error(`Invalid tool arguments JSON: ${(raw || "").slice(0, 120)}`);
+    return { ok: false, error: `Invalid tool arguments JSON: ${(raw || "").slice(0, 120)}` };
   }
 }
 
 function waitForConfirmation(askId: string, signal: AbortSignal): Promise<boolean> {
   return new Promise((resolve) => {
-    pendingConfirmations.set(askId, { resolve });
+    let settled = false;
 
-    const onAbort = () => {
+    function finish(approved: boolean) {
+      if (settled) return;
+      settled = true;
+      signal.removeEventListener("abort", onAbort);
       pendingConfirmations.delete(askId);
-      resolve(false);
-    };
+      resolve(approved);
+    }
+
+    function onAbort() {
+      finish(false);
+    }
+
+    pendingConfirmations.set(askId, { resolve: finish });
     signal.addEventListener("abort", onAbort, { once: true });
   });
 }
