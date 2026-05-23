@@ -3,7 +3,7 @@ import * as path from "path";
 import { getConversation } from "../db/conversations";
 import { getProject } from "../db/projects";
 import { saveUserMessage, saveAssistantMessage } from "../db/messages";
-import { runAgentLoop } from "./agent-service";
+import { AgentLoop } from "./agent-service";
 import { resolveCommand } from "./command-service";
 import { parseSkillReferences, resolveSkill } from "./skill-service";
 import { skillTracker } from "./skill-tracker";
@@ -104,7 +104,7 @@ export function sendChatMessage(convId: string, content: string, trustMode: bool
   const ac = new AbortController();
   agentControllers.set(convId, ac);
 
-  runAgentLoop({
+  const agent = new AgentLoop({
     convId,
     projectId: conv.projectId,
     projectPath: project.path,
@@ -113,7 +113,8 @@ export function sendChatMessage(convId: string, content: string, trustMode: bool
     signal: ac.signal,
     trustMode,
     customPrompt,
-  }).finally(() => {
+  });
+  agent.start().finally(() => {
     agentControllers.delete(convId);
   });
 }

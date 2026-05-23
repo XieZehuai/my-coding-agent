@@ -16,6 +16,12 @@ export function useAgent() {
       }
     });
 
+    window.api.onReasoning((data) => {
+      if (data.convId === convId) {
+        chatStore.appendReasoning(data.token);
+      }
+    });
+
     window.api.onToolStart((data) => {
       if (data.convId === convId) {
         chatStore.startToolCall(data.toolCallId, data.toolName, JSON.stringify(data.args));

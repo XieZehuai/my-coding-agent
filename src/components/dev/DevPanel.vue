@@ -59,22 +59,11 @@ import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useLayoutStore } from "../../stores/layout";
 import { useResizable } from "../../composables/useResizable";
 import ResizeHandle from "../layout/ResizeHandle.vue";
-
-interface DevStatus {
-  convId: string;
-  state: string;
-  round: number;
-  maxTurns: number;
-  tokenCount: number;
-  tokenLimit: number;
-  tokenPercent: number;
-  toolLogs: Array<{ toolName: string; target: string; duration: number; status: string; error?: string }>;
-  lastCompression: number | null;
-}
+import type { AgentStatus } from "@shared/types";
 
 const layoutStore = useLayoutStore();
 
-const status = ref<DevStatus>({
+const status = ref<AgentStatus>({
   convId: "",
   state: "idle",
   round: 0,
@@ -109,7 +98,7 @@ function handleKeydown(e: KeyboardEvent) {
 onMounted(() => {
   document.addEventListener("keydown", handleKeydown);
   window.api.onStatus((data) => {
-    status.value = data as DevStatus;
+    status.value = data as AgentStatus;
   });
 });
 onUnmounted(() => {
@@ -124,7 +113,7 @@ onUnmounted(() => {
   flex-direction: row;
   overflow: hidden;
   background: var(--bg-secondary);
-  border-left: 2px solid var(--accent);
+  border-left: 1px solid var(--border);
   height: 100%;
 }
 .panel-inner {

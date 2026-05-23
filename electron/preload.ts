@@ -45,6 +45,9 @@ const api = {
   onToken: (callback: (data: { convId: string; token: string }) => void) => {
     ipcRenderer.on(IPC.EVENT_TOKEN, (_event, data) => callback(data));
   },
+  onReasoning: (callback: (data: { convId: string; token: string }) => void) => {
+    ipcRenderer.on(IPC.EVENT_REASONING, (_event, data) => callback(data));
+  },
   onToolStart: (callback: (data: { convId: string; toolName: string; toolCallId: string; args: unknown }) => void) => {
     ipcRenderer.on(IPC.EVENT_TOOL_START, (_event, data) => callback(data));
   },

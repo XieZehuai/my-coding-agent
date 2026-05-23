@@ -65,20 +65,19 @@ export interface ToolResult {
 
 export type AgentState =
   | "idle"
-  | "building_context"
   | "compressing"
   | "streaming"
-  | "executing_tool"
+  | "executing_tools"
   | "waiting_user"
   | "completed"
   | "cancelled"
   | "error";
 
 export interface AgentStatus {
-  convId: string | null;
+  convId: string;
   state: AgentState;
   round: number;
-  maxRounds: number;
+  maxTurns: number;
   tokenCount: number;
   tokenLimit: number;
   tokenPercent: number;
@@ -213,6 +212,7 @@ export const IPC = {
 
   // Events (Main → Renderer)
   EVENT_TOKEN: "agent:token",
+  EVENT_REASONING: "agent:reasoning",
   EVENT_TOOL_START: "agent:tool-start",
   EVENT_TOOL_END: "agent:tool-end",
   EVENT_TOOL_ERROR: "agent:tool-error",

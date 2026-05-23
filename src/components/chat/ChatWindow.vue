@@ -1,14 +1,14 @@
 <template>
   <div class="chat-window">
-    <div class="chat-header" v-if="convStore.selectedConversation">
+    <div v-if="convStore.selectedConversation" class="chat-header">
       <h2 class="chat-title">{{ convStore.selectedConversation.title }}</h2>
       <div class="header-actions">
         <button
           :class="['trust-toggle', { active: trustStore.isTrusted(convStore.selectedConversationId!) }]"
           @click="toggleTrust"
-          :title="trustStore.isTrusted(convStore.selectedConversationId!) ? 'Trust mode ON' : 'Trust mode OFF'"
         >
-          {{ trustStore.isTrusted(convStore.selectedConversationId!) ? "🔓" : "🔒" }}
+          <span class="trust-dot" :data-active="trustStore.isTrusted(convStore.selectedConversationId!)"></span>
+          {{ trustStore.isTrusted(convStore.selectedConversationId!) ? "Trust On" : "Trust Off" }}
         </button>
       </div>
     </div>
@@ -85,25 +85,40 @@ function toggleTrust() {
   align-items: center;
 }
 .trust-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   background: none;
   border: 1px solid var(--border);
   color: var(--text-secondary);
-  font-size: 16px;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
-  padding: 4px 10px;
+  padding: 4px 12px;
   border-radius: 6px;
   transition: all 0.15s;
 }
 .trust-toggle:hover {
   background: var(--bg-hover);
 }
+.trust-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-muted);
+  transition: background 0.15s;
+}
 .trust-toggle.active {
-  background: var(--warning);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
   border-color: var(--warning);
-  color: var(--warning-text);
+  color: var(--warning);
+}
+.trust-toggle.active .trust-dot {
+  background: var(--warning);
 }
 .input-wrapper {
   flex-shrink: 0;
-  min-height: 165px;
+  min-height: 200px;
 }
 </style>

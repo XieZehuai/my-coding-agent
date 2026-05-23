@@ -1,5 +1,4 @@
 import { spawn } from "child_process";
-import * as path from "path";
 
 function runCommand(command: string, projectPath: string, timeout = 120000): Promise<string> {
   return new Promise((resolve, reject) => {

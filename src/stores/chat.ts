@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
-import type { Message } from "@shared/types";
+import type { Message, AgentState } from "@shared/types";
 
 export interface AskInfo {
   askId: string;
@@ -35,18 +35,23 @@ export interface DisplayMessage {
   role: string;
   segments: Segment[];
   createdAt: number;
+  reasoningContent?: string;
 }
 
 export const useChatStore = defineStore("chat", () => {
   const messages = ref<DisplayMessage[]>([]);
-  const isStreaming = ref(false);
-  const isCancelled = ref(false);
-  const error = ref<string | null>(null);
+  const state = ref<AgentState>("idle");
+  const lastError = ref<string | null>(null);
   const streamingSegments = ref<Segment[]>([]);
+  const streamingReasoning = ref("");
   const pendingAsk = ref<AskInfo | null>(null);
   const loadingMessages = ref(false);
 
   const hasMessages = computed(() => messages.value.length > 0);
+
+  const isActive = computed(() =>
+    ["streaming", "compressing", "executing_tools", "waiting_user"].includes(state.value)
+  );
 
   function setMessages(msgs: DisplayMessage[]) {
     messages.value = msgs;
@@ -57,10 +62,14 @@ export const useChatStore = defineStore("chat", () => {
   }
 
   function startStreaming() {
-    isStreaming.value = true;
-    isCancelled.value = false;
-    error.value = null;
+    state.value = "streaming";
+    lastError.value = null;
     streamingSegments.value = [];
+    streamingReasoning.value = "";
+  }
+
+  function appendReasoning(token: string) {
+    streamingReasoning.value += token;
   }
 
   function appendToken(token: string) {
@@ -105,15 +114,16 @@ export const useChatStore = defineStore("chat", () => {
         role: "assistant",
         segments: [...streamingSegments.value],
         createdAt: Date.now(),
+        reasoningContent: streamingReasoning.value || undefined,
       });
     }
-    isStreaming.value = false;
+    state.value = "completed";
     streamingSegments.value = [];
+    streamingReasoning.value = "";
   }
 
   function cancelStreaming() {
-    isStreaming.value = false;
-    isCancelled.value = true;
+    state.value = "cancelled";
     streamingSegments.value = [];
   }
 
@@ -126,15 +136,14 @@ export const useChatStore = defineStore("chat", () => {
   }
 
   function setError(err: string) {
-    error.value = err;
-    // Keep isStreaming true so Cancel button stays visible
+    state.value = "error";
+    lastError.value = err;
   }
 
   function reset() {
     messages.value = [];
-    isStreaming.value = false;
-    isCancelled.value = false;
-    error.value = null;
+    state.value = "idle";
+    lastError.value = null;
     streamingSegments.value = [];
     pendingAsk.value = null;
   }
@@ -208,6 +217,7 @@ export const useChatStore = defineStore("chat", () => {
         role: msg.role,
         segments,
         createdAt: msg.createdAt,
+        reasoningContent: msg.reasoningContent || undefined,
       });
     }
 
@@ -226,16 +236,18 @@ export const useChatStore = defineStore("chat", () => {
 
   return {
     messages,
-    isStreaming,
-    isCancelled,
-    error,
+    state,
+    isActive,
+    lastError,
     streamingSegments,
+    streamingReasoning,
     pendingAsk,
     loadingMessages,
     hasMessages,
     setMessages,
     addMessage,
     startStreaming,
+    appendReasoning,
     appendToken,
     startToolCall,
     endToolCall,

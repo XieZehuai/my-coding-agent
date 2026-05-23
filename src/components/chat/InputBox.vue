@@ -3,19 +3,26 @@
     <div class="status-bar">
       <span class="status-text">{{ inputStatus }}</span>
     </div>
-    <div class="input-container">
-      <textarea
-        ref="textareaRef"
-        v-model="inputText"
-        :disabled="chatStore.isStreaming"
-        class="input-textarea"
-        placeholder="Type @ for files, / for commands, # for skills..."
-        rows="3"
-        @keydown="handleKeydown"
-        @input="handleInput"
-      ></textarea>
-      <button v-if="!chatStore.isStreaming" :disabled="!canSend" class="send-btn" @click="handleSend">Send</button>
-      <button v-else class="cancel-btn" @click="handleCancel">Cancel</button>
+    <div :class="['composer-shell', { focused: isFocused, disabled: chatStore.isActive }]">
+      <div class="composer-inner">
+        <textarea
+          ref="textareaRef"
+          v-model="inputText"
+          :disabled="chatStore.isActive"
+          class="input-textarea"
+          placeholder="Type @ for files, / for commands, # for skills..."
+          rows="3"
+          @keydown="handleKeydown"
+          @input="handleInput"
+          @focus="isFocused = true"
+          @blur="isFocused = false"
+        ></textarea>
+        <div class="composer-actions">
+          <span class="char-count">{{ inputText.length }}</span>
+          <button v-if="!chatStore.isActive" :disabled="!canSend" class="send-btn" @click="handleSend">Send</button>
+          <button v-else class="cancel-btn" @click="handleCancel">Cancel</button>
+        </div>
+      </div>
     </div>
     <div v-if="showFileSearch && fileResults.length > 0" class="autocomplete-dropdown">
       <div
@@ -24,8 +31,8 @@
         :class="['dropdown-item', { selected: index === fileSelectedIndex }]"
         @click="selectDropdownItem('file', item)"
       >
-        <span class="item-icon">{{ item.endsWith("/") ? "📁" : "📄" }}</span
-        ><span>{{ item }}</span>
+        <span :class="['file-marker', item.endsWith('/') ? 'folder' : 'file']"></span>
+        <span>{{ item }}</span>
       </div>
     </div>
     <div v-if="showCmdSearch && cmdResults.length > 0" class="autocomplete-dropdown">
@@ -35,7 +42,8 @@
         :class="['dropdown-item', { selected: index === cmdSelectedIndex }]"
         @click="selectDropdownItem('cmd', item)"
       >
-        <span class="item-icon">⚙</span><span>{{ item }}</span>
+        <span class="cmd-marker">/</span>
+        <span>{{ item }}</span>
       </div>
     </div>
     <div v-if="showSkillSearch && skillResults.length > 0" class="autocomplete-dropdown">
@@ -45,7 +53,7 @@
         :class="['dropdown-item', { selected: index === skillSelectedIndex }]"
         @click="selectDropdownItem('skill', item)"
       >
-        <span class="item-icon">#</span>
+        <span class="skill-marker">#</span>
         <div class="skill-item-info">
           <span class="skill-item-name">{{ item.name }}</span>
           <span class="skill-item-desc">{{ item.description }}</span>
@@ -72,6 +80,7 @@ const { sendMessage, cancelMessage, setupListeners } = useAgent();
 
 const inputText = ref("");
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
+const isFocused = ref(false);
 const showFileSearch = ref(false);
 const showCmdSearch = ref(false);
 const showSkillSearch = ref(false);
@@ -84,7 +93,7 @@ const skillSelectedIndex = ref(0);
 
 const canSend = computed(() => convStore.selectedConversationId && inputText.value.trim().length > 0);
 const inputStatus = computed(() => {
-  if (chatStore.isStreaming) return "Agent is responding";
+  if (chatStore.isActive) return "Agent is responding";
   if (showFileSearch.value) return "File search";
   if (showCmdSearch.value) return "Command";
   if (showSkillSearch.value) return "Skill";
@@ -105,8 +114,7 @@ async function handleInput() {
   const el = textareaRef.value;
   if (el) {
     el.style.height = "auto";
-    const containerHeight = el.parentElement?.clientHeight ?? layoutStore.inputHeight;
-    const maxH = containerHeight - 16;
+    const maxH = Math.max(120, (layoutStore.inputHeight ?? 200) - 60);
     el.style.height = Math.min(el.scrollHeight, maxH) + "px";
   }
   const text = inputText.value;
@@ -295,21 +303,36 @@ async function handleCancel() {
   font-size: 11px;
   color: var(--text-muted);
 }
-.input-container {
-  display: flex;
-  gap: 8px;
-  align-items: flex-end;
+
+.composer-shell {
+  flex: 1;
   max-width: 800px;
   margin: 0 auto;
   padding: 8px 20px;
   width: 100%;
-  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
-.input-textarea {
-  flex: 1;
-  background: var(--input-bg);
+.composer-shell.focused .composer-inner {
+  border-color: var(--input-focus);
+}
+.composer-shell.disabled .composer-inner {
+  opacity: 0.6;
+}
+.composer-inner {
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--input-border);
   border-radius: 8px;
+  background: var(--input-bg);
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+.input-textarea {
+  flex: 1;
+  background: transparent;
+  border: none;
   color: var(--text-primary);
   font-size: 14px;
   font-family: inherit;
@@ -319,18 +342,33 @@ async function handleCancel() {
   line-height: 1.5;
   overflow-y: auto;
 }
-.input-textarea:focus {
-  border-color: var(--input-focus);
-}
 .input-textarea::placeholder {
   color: var(--text-muted);
 }
+.input-textarea:disabled {
+  cursor: not-allowed;
+}
+
+.composer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 6px 14px 10px;
+}
+.char-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-right: auto;
+  font-family: "Consolas", "Courier New", monospace;
+}
+
 .send-btn,
 .cancel-btn {
-  padding: 10px 20px;
+  padding: 6px 18px;
   border: none;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: 6px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
@@ -364,15 +402,16 @@ async function handleCancel() {
   background: var(--bg-tertiary);
   border: 1px solid var(--border);
   border-radius: 8px;
-  max-height: 200px;
+  max-height: 220px;
   overflow-y: auto;
   z-index: 100;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 .dropdown-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
+  gap: 10px;
+  padding: 8px 12px;
   font-size: 13px;
   color: var(--text-primary);
   cursor: pointer;
@@ -381,9 +420,46 @@ async function handleCancel() {
 .dropdown-item.selected {
   background: var(--bg-hover);
 }
-.item-icon {
-  font-size: 14px;
+
+/* File/dir CSS markers */
+.file-marker {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border-radius: 3px;
+  opacity: 0.7;
 }
+.file-marker.file {
+  border: 1.5px solid var(--text-muted);
+  background: transparent;
+}
+.file-marker.folder {
+  background: var(--accent);
+  opacity: 0.5;
+  border-radius: 3px 3px 0 3px;
+  clip-path: polygon(0% 30%, 0% 100%, 100% 100%, 100% 30%, 30% 30%, 30% 0%, 50% 0%);
+}
+
+/* Command marker */
+.cmd-marker {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-muted);
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* Skill marker */
+.skill-marker {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
 .skill-item-info {
   display: flex;
   flex-direction: column;

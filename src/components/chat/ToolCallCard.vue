@@ -35,8 +35,8 @@ const truncatedArgs = computed(() => {
 
 <style scoped>
 .tool-call-card {
-  background: #11111b;
-  border: 1px solid #313244;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
   border-radius: 6px;
   margin-top: 8px;
   overflow: hidden;
@@ -49,25 +49,30 @@ const truncatedArgs = computed(() => {
   padding: 6px 12px;
   cursor: pointer;
   font-size: 13px;
-  color: #a6adc8;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  list-style: none;
+}
+
+.tool-header::-webkit-details-marker {
+  display: none;
 }
 
 .tool-header:hover {
-  background: #313244;
+  background: var(--bg-hover);
 }
 
 .tool-icon {
   width: 8px;
   height: 8px;
-  border-radius: 999px;
-  background: #89b4fa;
-  box-shadow: 0 0 0 3px rgba(137, 180, 250, 0.12);
+  border-radius: 50%;
+  background: var(--accent);
   flex-shrink: 0;
 }
 
 .tool-name {
   font-weight: 600;
-  color: #89b4fa;
+  color: var(--accent);
   white-space: nowrap;
 }
 
@@ -75,18 +80,18 @@ const truncatedArgs = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #6c7086;
+  color: var(--text-muted);
   font-size: 12px;
 }
 
 .tool-body {
   padding: 8px 12px;
-  border-top: 1px solid #313244;
+  border-top: 1px solid var(--border);
 }
 
 .tool-args-full {
   font-size: 12px;
-  color: #a6adc8;
+  color: var(--text-secondary);
   white-space: pre-wrap;
   word-break: break-all;
 }
