@@ -4,7 +4,10 @@
     :class="{ 'is-resizing': sidebarResize.isDragging.value }"
     :style="{ '--sidebar-width': layoutStore.sidebarWidth + 'px' }"
   >
-    <aside class="sidebar" :style="{ width: layoutStore.sidebarWidth + 'px', minWidth: layoutStore.sidebarWidth + 'px' }">
+    <aside
+      class="sidebar"
+      :style="{ width: layoutStore.sidebarWidth + 'px', minWidth: layoutStore.sidebarWidth + 'px' }"
+    >
       <ProjectList />
       <ConversationList />
       <ThemeToggle />
@@ -24,37 +27,39 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
-import { useProjectStore } from '../../stores/project'
-import { useLayoutStore } from '../../stores/layout'
-import { useResizable } from '../../composables/useResizable'
-import ProjectList from '../sidebar/ProjectList.vue'
-import ConversationList from '../sidebar/ConversationList.vue'
-import ChatWindow from '../chat/ChatWindow.vue'
-import PermissionModal from '../modals/PermissionModal.vue'
-import DevPanel from '../dev/DevPanel.vue'
-import ThemeToggle from '../layout/ThemeToggle.vue'
-import ResizeHandle from '../layout/ResizeHandle.vue'
+import { computed, onMounted } from "vue";
+import { useProjectStore } from "../../stores/project";
+import { useLayoutStore } from "../../stores/layout";
+import { useResizable } from "../../composables/useResizable";
+import ProjectList from "../sidebar/ProjectList.vue";
+import ConversationList from "../sidebar/ConversationList.vue";
+import ChatWindow from "../chat/ChatWindow.vue";
+import PermissionModal from "../modals/PermissionModal.vue";
+import DevPanel from "../dev/DevPanel.vue";
+import ThemeToggle from "../layout/ThemeToggle.vue";
+import ResizeHandle from "../layout/ResizeHandle.vue";
 
-const projectStore = useProjectStore()
-const layoutStore = useLayoutStore()
+const projectStore = useProjectStore();
+const layoutStore = useLayoutStore();
 
 const sidebarResize = useResizable({
   value: computed({
     get: () => layoutStore.sidebarWidth,
-    set: (v) => { layoutStore.sidebarWidth = v },
+    set: (v) => {
+      layoutStore.sidebarWidth = v;
+    },
   }),
   min: 200,
   max: 500,
-  axis: 'horizontal',
+  axis: "horizontal",
   onDragStart: () => {},
   onDragEnd: () => {},
-})
+});
 
 onMounted(async () => {
-  await projectStore.loadProjects()
-  layoutStore.clampOnMount()
-})
+  await projectStore.loadProjects();
+  layoutStore.clampOnMount();
+});
 </script>
 
 <style scoped>

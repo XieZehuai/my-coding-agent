@@ -62,7 +62,7 @@ watch(
     await nextTick();
     if (listRef.value) listRef.value.scrollTop = listRef.value.scrollHeight;
   },
-  { deep: true },
+  { deep: true }
 );
 </script>
 

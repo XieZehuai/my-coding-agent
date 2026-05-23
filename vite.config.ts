@@ -1,35 +1,35 @@
-import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
-import electron from 'vite-plugin-electron'
-import renderer from 'vite-plugin-electron-renderer'
-import { resolve } from 'path'
+import { defineConfig } from "vite";
+import vue from "@vitejs/plugin-vue";
+import electron from "vite-plugin-electron";
+import renderer from "vite-plugin-electron-renderer";
+import { resolve } from "path";
 
 export default defineConfig({
   plugins: [
     vue(),
     electron([
       {
-        entry: 'electron/main.ts',
+        entry: "electron/main.ts",
         onstart(args) {
-          args.reload()
+          args.reload();
         },
         vite: {
           build: {
-            outDir: 'dist-electron',
+            outDir: "dist-electron",
             rollupOptions: {
-              external: ['better-sqlite3'],
+              external: ["better-sqlite3"],
             },
           },
         },
       },
       {
-        entry: 'electron/preload.ts',
+        entry: "electron/preload.ts",
         onstart(args) {
-          args.reload()
+          args.reload();
         },
         vite: {
           build: {
-            outDir: 'dist-electron',
+            outDir: "dist-electron",
           },
         },
       },
@@ -38,8 +38,8 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': resolve(__dirname, 'src'),
-      '@shared': resolve(__dirname, 'shared'),
+      "@": resolve(__dirname, "src"),
+      "@shared": resolve(__dirname, "shared"),
     },
   },
-})
+});

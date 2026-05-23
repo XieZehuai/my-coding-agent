@@ -1,29 +1,29 @@
-import { ipcMain, BrowserWindow } from 'electron'
-import { IPC } from '../../shared/types'
+import { ipcMain, BrowserWindow } from "electron";
+import { IPC } from "../../shared/types";
 
-type IpcHandlerFn = (event: Electron.IpcMainInvokeEvent, ...args: any[]) => unknown
-const handlers = new Map<string, IpcHandlerFn>()
+type IpcHandlerFn = (event: Electron.IpcMainInvokeEvent, ...args: any[]) => unknown;
+const handlers = new Map<string, IpcHandlerFn>();
 
 export function registerHandler(channel: string, fn: IpcHandlerFn) {
   if (handlers.has(channel)) {
-    console.warn(`Handler for ${channel} already registered, replacing.`)
+    console.warn(`Handler for ${channel} already registered, replacing.`);
   }
-  handlers.set(channel, fn)
-  ipcMain.handle(channel, fn)
+  handlers.set(channel, fn);
+  ipcMain.handle(channel, fn);
 }
 
 export function removeHandler(channel: string) {
-  handlers.delete(channel)
-  ipcMain.removeHandler(channel)
+  handlers.delete(channel);
+  ipcMain.removeHandler(channel);
 }
 
 export function emitToRenderer(channel: string, data: unknown) {
-  const windows = BrowserWindow.getAllWindows()
+  const windows = BrowserWindow.getAllWindows();
   for (const win of windows) {
-    win.webContents.send(channel, data)
+    win.webContents.send(channel, data);
   }
 }
 
 export function getAllChannels() {
-  return Object.values(IPC)
+  return Object.values(IPC);
 }

@@ -1,19 +1,19 @@
-import Database from 'better-sqlite3'
-import { app } from 'electron'
-import { join } from 'path'
-import { initUndoSchema } from './undo'
+import Database from "better-sqlite3";
+import { app } from "electron";
+import { join } from "path";
+import { initUndoSchema } from "./undo";
 
-let db: Database.Database | null = null
+let db: Database.Database | null = null;
 
 export function getDb(): Database.Database {
   if (!db) {
-    const dbPath = join(app.getPath('userData'), 'coding-agent.db')
-    db = new Database(dbPath)
-    db.pragma('journal_mode = WAL')
-    db.pragma('foreign_keys = ON')
-    initSchema(db)
+    const dbPath = join(app.getPath("userData"), "coding-agent.db");
+    db = new Database(dbPath);
+    db.pragma("journal_mode = WAL");
+    db.pragma("foreign_keys = ON");
+    initSchema(db);
   }
-  return db
+  return db;
 }
 
 function initSchema(db: Database.Database) {
@@ -49,21 +49,21 @@ function initSchema(db: Database.Database) {
 
     CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conv_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_conversations_project ON conversations(project_id, updated_at);
-  `)
+  `);
 
   // Migration for existing databases
   try {
-    db.exec('ALTER TABLE messages ADD COLUMN reasoning_content TEXT NOT NULL DEFAULT \'\'')
+    db.exec("ALTER TABLE messages ADD COLUMN reasoning_content TEXT NOT NULL DEFAULT ''");
   } catch {
     // column already exists
   }
 
-  initUndoSchema(db)
+  initUndoSchema(db);
 }
 
 export function closeDb() {
   if (db) {
-    db.close()
-    db = null
+    db.close();
+    db = null;
   }
 }

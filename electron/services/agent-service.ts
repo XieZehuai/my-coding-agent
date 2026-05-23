@@ -134,7 +134,7 @@ export async function runAgentLoop(options: AgentRunOptions): Promise<void> {
           onError: (error) => {
             emitToRenderer(IPC.EVENT_ERROR, { convId, error: error.message });
           },
-        },
+        }
       );
     } catch (e) {
       if ((e as Error).message === "Request cancelled") {
@@ -190,7 +190,7 @@ async function executeToolCalls(
   convId: string,
   projectPath: string,
   undoService: UndoService,
-  signal: AbortSignal,
+  signal: AbortSignal
 ) {
   for (const tc of toolCalls) {
     if (signal.aborted) {
@@ -283,7 +283,7 @@ async function summarizeContext(
   client: OpenAIClient,
   config: AppConfig,
   messages: ChatMessage[],
-  signal: AbortSignal,
+  signal: AbortSignal
 ): Promise<string> {
   try {
     const summaryMessages: ChatMessage[] = [
@@ -316,7 +316,7 @@ async function generateTitle(
   config: AppConfig,
   convId: string,
   messages: ChatMessage[],
-  signal: AbortSignal,
+  signal: AbortSignal
 ): Promise<void> {
   try {
     const titleMessages: ChatMessage[] = [
@@ -346,7 +346,7 @@ function emitStatus(
   state: string,
   messages: ChatMessage[],
   agentState: AgentRunState,
-  maxTurns: number,
+  maxTurns: number
 ) {
   const tokenCount = countTokens(messages);
   const snapshot: AgentStatusSnapshot = {

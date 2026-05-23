@@ -31,5 +31,5 @@ export default defineConfigWithVueTs(
     languageOptions: {
       globals: globals.browser,
     },
-  },
+  }
 );

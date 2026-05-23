@@ -1,12 +1,16 @@
 <template>
-  <button class="theme-toggle" @click="themeStore.toggle" :title="themeStore.mode === 'light' ? 'Switch to dark' : 'Switch to light'">
-    {{ themeStore.mode === 'light' ? '🌙' : '☀️' }}
+  <button
+    class="theme-toggle"
+    @click="themeStore.toggle"
+    :title="themeStore.mode === 'light' ? 'Switch to dark' : 'Switch to light'"
+  >
+    {{ themeStore.mode === "light" ? "🌙" : "☀️" }}
   </button>
 </template>
 
 <script setup lang="ts">
-import { useThemeStore } from '../../stores/theme'
-const themeStore = useThemeStore()
+import { useThemeStore } from "../../stores/theme";
+const themeStore = useThemeStore();
 </script>
 
 <style scoped>

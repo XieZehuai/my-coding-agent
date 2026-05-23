@@ -8,14 +8,14 @@
 
 <script setup lang="ts">
 defineProps<{
-  axis: 'horizontal' | 'vertical'
-  active: boolean
-}>()
+  axis: "horizontal" | "vertical";
+  active: boolean;
+}>();
 
 const emit = defineEmits<{
-  'resize-start': [e: PointerEvent]
-  reset: []
-}>()
+  "resize-start": [e: PointerEvent];
+  reset: [];
+}>();
 </script>
 
 <style scoped>
@@ -27,7 +27,7 @@ const emit = defineEmits<{
   transition: background 0.15s;
 }
 .resize-handle::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 50%;
   left: 50%;

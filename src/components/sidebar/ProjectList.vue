@@ -15,9 +15,7 @@
         <span class="item-icon">&#128193;</span>
         <span class="item-label">{{ project.name }}</span>
       </div>
-      <div v-if="projectStore.projects.length === 0" class="empty-hint">
-        Click + to add a project
-      </div>
+      <div v-if="projectStore.projects.length === 0" class="empty-hint">Click + to add a project</div>
     </div>
 
     <div
@@ -31,88 +29,146 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, onMounted, onUnmounted } from 'vue'
-import { useProjectStore } from '../../stores/project'
-import { useConversationStore } from '../../stores/conversation'
-import { useChatStore } from '../../stores/chat'
+import { reactive, onMounted, onUnmounted } from "vue";
+import { useProjectStore } from "../../stores/project";
+import { useConversationStore } from "../../stores/conversation";
+import { useChatStore } from "../../stores/chat";
 
-const projectStore = useProjectStore()
-const convStore = useConversationStore()
-const chatStore = useChatStore()
+const projectStore = useProjectStore();
+const convStore = useConversationStore();
+const chatStore = useChatStore();
 
 const contextMenu = reactive({
-  visible: false, x: 0, y: 0, projectId: null as string | null,
-})
+  visible: false,
+  x: 0,
+  y: 0,
+  projectId: null as string | null,
+});
 
 function showContextMenu(id: string, event: MouseEvent) {
-  contextMenu.visible = true
-  contextMenu.x = event.clientX
-  contextMenu.y = event.clientY
-  contextMenu.projectId = id
+  contextMenu.visible = true;
+  contextMenu.x = event.clientX;
+  contextMenu.y = event.clientY;
+  contextMenu.projectId = id;
 }
 
-function hideContextMenu() { contextMenu.visible = false }
-onMounted(() => document.addEventListener('click', hideContextMenu))
-onUnmounted(() => document.removeEventListener('click', hideContextMenu))
+function hideContextMenu() {
+  contextMenu.visible = false;
+}
+onMounted(() => document.addEventListener("click", hideContextMenu));
+onUnmounted(() => document.removeEventListener("click", hideContextMenu));
 
 async function handleAddProject() {
-  await projectStore.addProject()
-  await convStore.loadConversations()
+  await projectStore.addProject();
+  await convStore.loadConversations();
 }
 
 async function handleSelectProject(id: string) {
-  projectStore.selectProject(id)
-  chatStore.reset()
-  await convStore.loadConversations()
+  projectStore.selectProject(id);
+  chatStore.reset();
+  await convStore.loadConversations();
 }
 
 async function handleRemoveProject() {
   if (contextMenu.projectId) {
-    await projectStore.removeProject(contextMenu.projectId)
-    chatStore.reset()
-    await convStore.loadConversations()
+    await projectStore.removeProject(contextMenu.projectId);
+    chatStore.reset();
+    await convStore.loadConversations();
   }
-  hideContextMenu()
+  hideContextMenu();
 }
 </script>
 
 <style scoped>
-.sidebar-section { border-bottom: 1px solid var(--border); }
+.sidebar-section {
+  border-bottom: 1px solid var(--border);
+}
 
 .section-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 12px; font-size: 11px; font-weight: 600;
-  text-transform: uppercase; letter-spacing: 1px; color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
 }
 
 .btn-icon {
-  background: none; border: none; color: var(--text-secondary);
-  font-size: 16px; cursor: pointer; padding: 2px 6px; border-radius: 4px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
 }
-.btn-icon:hover { background: var(--bg-hover); color: var(--text-primary); }
+.btn-icon:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
 
-.section-list { max-height: 200px; overflow-y: auto; }
+.section-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
 
 .sidebar-item {
-  display: flex; align-items: center; gap: 8px; padding: 6px 12px;
-  cursor: pointer; font-size: 13px; color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-primary);
   transition: background 0.1s;
 }
-.sidebar-item:hover { background: var(--bg-hover); }
-.sidebar-item.active { background: var(--bg-active); }
+.sidebar-item:hover {
+  background: var(--bg-hover);
+}
+.sidebar-item.active {
+  background: var(--bg-active);
+}
 
-.item-icon { font-size: 14px; }
-.item-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.empty-hint { padding: 10px 12px; font-size: 12px; color: var(--text-muted); }
+.item-icon {
+  font-size: 14px;
+}
+.item-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.empty-hint {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
 
 .context-menu {
-  position: fixed; z-index: 1000; background: var(--bg-tertiary);
-  border: 1px solid var(--border); border-radius: 6px; padding: 4px; min-width: 120px;
+  position: fixed;
+  z-index: 1000;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px;
+  min-width: 120px;
 }
 .context-menu button {
-  display: block; width: 100%; padding: 6px 12px; background: none;
-  border: none; color: var(--text-primary); font-size: 13px; text-align: left;
-  cursor: pointer; border-radius: 4px;
+  display: block;
+  width: 100%;
+  padding: 6px 12px;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
 }
-.context-menu button:hover { background: var(--bg-hover); color: var(--danger); }
+.context-menu button:hover {
+  background: var(--bg-hover);
+  color: var(--danger);
+}
 </style>

@@ -1,9 +1,9 @@
-import type { Message, ToolCall } from '@shared/types'
+import type { Message, ToolCall } from "@shared/types";
 
-export type { Message, ToolCall }
+export type { Message, ToolCall };
 
 export interface AskInfo {
-  askId: string
-  toolName: string
-  detail: string
+  askId: string;
+  toolName: string;
+  detail: string;
 }

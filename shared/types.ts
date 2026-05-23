@@ -3,32 +3,32 @@
 // ============================================================
 
 export interface Project {
-  id: string
-  name: string
-  path: string
-  createdAt: number
-  updatedAt: number
+  id: string;
+  name: string;
+  path: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
-export type MessageRole = 'user' | 'assistant' | 'system' | 'tool'
+export type MessageRole = "user" | "assistant" | "system" | "tool";
 
 export interface Message {
-  id: string
-  convId: string
-  role: MessageRole
-  content: string
-  reasoningContent: string
-  toolCalls: ToolCall[] | null
-  toolCallId: string | null
-  createdAt: number
+  id: string;
+  convId: string;
+  role: MessageRole;
+  content: string;
+  reasoningContent: string;
+  toolCalls: ToolCall[] | null;
+  toolCallId: string | null;
+  createdAt: number;
 }
 
 export interface Conversation {
-  id: string
-  projectId: string
-  title: string
-  createdAt: number
-  updatedAt: number
+  id: string;
+  projectId: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 // ============================================================
@@ -36,27 +36,27 @@ export interface Conversation {
 // ============================================================
 
 export interface ToolCall {
-  id: string
-  type: 'function'
+  id: string;
+  type: "function";
   function: {
-    name: string
-    arguments: string // JSON string
-  }
+    name: string;
+    arguments: string; // JSON string
+  };
 }
 
 export interface ToolDefinition {
-  type: 'function'
+  type: "function";
   function: {
-    name: string
-    description: string
-    parameters: Record<string, unknown>
-  }
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
 }
 
 export interface ToolResult {
-  toolCallId: string
-  content: string
-  error?: string
+  toolCallId: string;
+  content: string;
+  error?: string;
 }
 
 // ============================================================
@@ -64,54 +64,54 @@ export interface ToolResult {
 // ============================================================
 
 export type AgentState =
-  | 'idle'
-  | 'building_context'
-  | 'compressing'
-  | 'streaming'
-  | 'executing_tool'
-  | 'waiting_user'
-  | 'completed'
-  | 'cancelled'
-  | 'error'
+  | "idle"
+  | "building_context"
+  | "compressing"
+  | "streaming"
+  | "executing_tool"
+  | "waiting_user"
+  | "completed"
+  | "cancelled"
+  | "error";
 
 export interface AgentStatus {
-  convId: string | null
-  state: AgentState
-  round: number
-  maxRounds: number
-  tokenCount: number
-  tokenLimit: number
-  tokenPercent: number
-  lastCompression: number | null
-  toolLogs: ToolLogEntry[]
+  convId: string | null;
+  state: AgentState;
+  round: number;
+  maxRounds: number;
+  tokenCount: number;
+  tokenLimit: number;
+  tokenPercent: number;
+  lastCompression: number | null;
+  toolLogs: ToolLogEntry[];
 }
 
 export interface ToolLogEntry {
-  timestamp: number
-  toolName: string
-  target: string
-  duration: number
-  status: 'success' | 'error' | 'timeout'
-  error?: string
+  timestamp: number;
+  toolName: string;
+  target: string;
+  duration: number;
+  status: "success" | "error" | "timeout";
+  error?: string;
 }
 
 // ============================================================
 // Permission
 // ============================================================
 
-export type PermissionLevel = 'always' | 'ask' | 'deny'
+export type PermissionLevel = "always" | "ask" | "deny";
 
 export interface PermissionConfig {
-  read: PermissionLevel
-  write: PermissionLevel
-  execute: PermissionLevel
+  read: PermissionLevel;
+  write: PermissionLevel;
+  execute: PermissionLevel;
 }
 
 export interface PermissionAsk {
-  askId: string
-  convId: string
-  toolName: string
-  detail: string
+  askId: string;
+  convId: string;
+  toolName: string;
+  detail: string;
 }
 
 // ============================================================
@@ -119,57 +119,57 @@ export interface PermissionAsk {
 // ============================================================
 
 export interface AppConfig {
-  api: ApiConfig
-  permissions: PermissionConfig
-  maxTurns: number
+  api: ApiConfig;
+  permissions: PermissionConfig;
+  maxTurns: number;
 }
 
 export interface ApiConfig {
-  baseUrl: string
-  apiKey: string
-  model: string
-  retry: number
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  retry: number;
 }
 
 export const DEFAULT_CONFIG: AppConfig = {
   api: {
-    baseUrl: 'https://api.deepseek.com/v1',
-    apiKey: '',
-    model: 'deepseek-chat',
+    baseUrl: "https://api.deepseek.com/v1",
+    apiKey: "",
+    model: "deepseek-chat",
     retry: 3,
   },
   permissions: {
-    read: 'always',
-    write: 'ask',
-    execute: 'ask',
+    read: "always",
+    write: "ask",
+    execute: "ask",
   },
   maxTurns: 50,
-}
+};
 
 // ============================================================
 // Export / Import
 // ============================================================
 
 export interface ConversationExport {
-  version: 1
-  exportedAt: string
+  version: 1;
+  exportedAt: string;
   project: {
-    name: string
-    path: string
-  }
+    name: string;
+    path: string;
+  };
   conversation: {
-    title: string
-    messages: ExportMessage[]
-  }
+    title: string;
+    messages: ExportMessage[];
+  };
 }
 
 export interface ExportMessage {
-  role: MessageRole
-  content: string
-  reasoningContent: string
-  toolCalls: ToolCall[] | null
-  toolCallId: string | null
-  timestamp: string
+  role: MessageRole;
+  content: string;
+  reasoningContent: string;
+  toolCalls: ToolCall[] | null;
+  toolCallId: string | null;
+  timestamp: string;
 }
 
 // ============================================================
@@ -178,50 +178,50 @@ export interface ExportMessage {
 
 export const IPC = {
   // Project
-  PROJECT_LIST: 'project:list',
-  PROJECT_ADD: 'project:add',
-  PROJECT_REMOVE: 'project:remove',
+  PROJECT_LIST: "project:list",
+  PROJECT_ADD: "project:add",
+  PROJECT_REMOVE: "project:remove",
 
   // Conversation
-  CONV_LIST: 'conversation:list',
-  CONV_CREATE: 'conversation:create',
-  CONV_DELETE: 'conversation:delete',
-  CONV_RENAME: 'conversation:rename',
-  CONV_UNDO: 'conversation:undo',
-  CONV_EXPORT: 'conversation:export',
-  CONV_IMPORT: 'conversation:import',
+  CONV_LIST: "conversation:list",
+  CONV_CREATE: "conversation:create",
+  CONV_DELETE: "conversation:delete",
+  CONV_RENAME: "conversation:rename",
+  CONV_UNDO: "conversation:undo",
+  CONV_EXPORT: "conversation:export",
+  CONV_IMPORT: "conversation:import",
 
   // Message
-  MESSAGE_LIST: 'message:list',
+  MESSAGE_LIST: "message:list",
 
   // Chat
-  CHAT_SEND: 'chat:send',
-  CHAT_CANCEL: 'chat:cancel',
+  CHAT_SEND: "chat:send",
+  CHAT_CANCEL: "chat:cancel",
 
   // Agent
-  AGENT_CONFIRM: 'agent:confirm',
-  AGENT_STATUS: 'agent:status',
-  AGENT_SET_TRUST: 'agent:set-trust',
+  AGENT_CONFIRM: "agent:confirm",
+  AGENT_STATUS: "agent:status",
+  AGENT_SET_TRUST: "agent:set-trust",
 
   // File
-  FILE_SEARCH: 'file:search',
-  COMMAND_SEARCH: 'command:search',
-  SKILL_SEARCH: 'skill:search',
+  FILE_SEARCH: "file:search",
+  COMMAND_SEARCH: "command:search",
+  SKILL_SEARCH: "skill:search",
 
   // Config
-  CONFIG_READ: 'config:read',
+  CONFIG_READ: "config:read",
 
   // Events (Main → Renderer)
-  EVENT_TOKEN: 'agent:token',
-  EVENT_TOOL_START: 'agent:tool-start',
-  EVENT_TOOL_END: 'agent:tool-end',
-  EVENT_TOOL_ERROR: 'agent:tool-error',
-  EVENT_ASK: 'agent:ask',
-  EVENT_COMPLETE: 'agent:complete',
-  EVENT_CANCELLED: 'agent:cancelled',
-  EVENT_ERROR: 'agent:error',
-  EVENT_STATUS: 'agent:status',
-  EVENT_TITLE_GENERATED: 'agent:title-generated',
-} as const
+  EVENT_TOKEN: "agent:token",
+  EVENT_TOOL_START: "agent:tool-start",
+  EVENT_TOOL_END: "agent:tool-end",
+  EVENT_TOOL_ERROR: "agent:tool-error",
+  EVENT_ASK: "agent:ask",
+  EVENT_COMPLETE: "agent:complete",
+  EVENT_CANCELLED: "agent:cancelled",
+  EVENT_ERROR: "agent:error",
+  EVENT_STATUS: "agent:status",
+  EVENT_TITLE_GENERATED: "agent:title-generated",
+} as const;
 
-export type IPCChannel = (typeof IPC)[keyof typeof IPC]
+export type IPCChannel = (typeof IPC)[keyof typeof IPC];

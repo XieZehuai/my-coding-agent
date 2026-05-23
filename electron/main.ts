@@ -2,12 +2,7 @@ import { app, BrowserWindow } from "electron";
 import { join } from "path";
 import { registerAllHandlers } from "./ipc/register";
 import { closeDb } from "./db/connection";
-import {
-  applyWindowState,
-  loadWindowState,
-  trackWindowState,
-  windowOptionsFromState,
-} from "./utils/window-state";
+import { applyWindowState, loadWindowState, trackWindowState, windowOptionsFromState } from "./utils/window-state";
 
 process.env.DIST_ELECTRON = join(__dirname);
 process.env.DIST = join(process.env.DIST_ELECTRON, "../dist");

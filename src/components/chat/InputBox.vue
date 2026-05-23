@@ -98,7 +98,7 @@ watch(
     inputText.value = "";
     if (newId) setupListeners(newId);
   },
-  { immediate: true },
+  { immediate: true }
 );
 
 async function handleInput() {

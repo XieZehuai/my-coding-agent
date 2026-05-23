@@ -1,20 +1,17 @@
 {
-  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
-  "appId": "com.coding-agent.app",
-  "productName": "Coding Agent",
-  "directories": {
-    "output": "release"
+  $schema: "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  appId: "com.coding-agent.app",
+  productName: "Coding Agent",
+  directories: {
+    output: "release",
   },
-  "win": {
-    "target": ["nsis"],
-    "icon": "resources/icon.ico"
+  win: {
+    target: ["nsis"],
+    icon: "resources/icon.ico",
   },
-  "nsis": {
-    "oneClick": false,
-    "allowToChangeInstallationDirectory": true
+  nsis: {
+    oneClick: false,
+    allowToChangeInstallationDirectory: true,
   },
-  "files": [
-    "dist/**/*",
-    "dist-electron/**/*"
-  ]
+  files: ["dist/**/*", "dist-electron/**/*"],
 }

@@ -12,25 +12,25 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import type { ToolCall } from '../../types/message'
+import { computed } from "vue";
+import type { ToolCall } from "../../types/message";
 
-const props = defineProps<{ toolCall: ToolCall }>()
+const props = defineProps<{ toolCall: ToolCall }>();
 
 const prettyArgs = computed(() => {
   try {
-    const parsed = JSON.parse(props.toolCall.function.arguments || '{}')
-    return JSON.stringify(parsed, null, 2)
+    const parsed = JSON.parse(props.toolCall.function.arguments || "{}");
+    return JSON.stringify(parsed, null, 2);
   } catch {
-    return props.toolCall.function.arguments
+    return props.toolCall.function.arguments;
   }
-})
+});
 
 const truncatedArgs = computed(() => {
-  const s = props.toolCall.function.arguments
-  if (s.length > 80) return s.substring(0, 80) + '...'
-  return s
-})
+  const s = props.toolCall.function.arguments;
+  if (s.length > 80) return s.substring(0, 80) + "...";
+  return s;
+});
 </script>
 
 <style scoped>
