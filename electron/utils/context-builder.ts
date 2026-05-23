@@ -64,7 +64,7 @@ export function buildInitialMessages(
       role: msg.role as ChatMessage["role"],
       content: msg.content,
       reasoning_content: msg.reasoningContent || undefined,
-      tool_calls: msg.toolCalls || undefined,
+      tool_calls: msg.toolCalls && msg.toolCalls.length > 0 ? msg.toolCalls : undefined,
       tool_call_id: msg.toolCallId || undefined,
     });
   }

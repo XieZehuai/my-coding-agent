@@ -11,7 +11,7 @@ import { getProject } from "../db/projects";
 import { getDb } from "../db/connection";
 import { UndoService } from "./undo-service";
 import { skillTracker } from "./skill-tracker";
-import { ConversationExport, Conversation } from "../../shared/types";
+import { ConversationExport, Conversation, ToolCall } from "../../shared/types";
 
 export function listProjectConversations(projectId: string) {
   return listConversations(projectId);
@@ -119,13 +119,15 @@ export async function importConversationFromFile(projectId: string, filePath: st
   const insertMany = db.transaction(() => {
     for (const msg of data.conversation!.messages!) {
       const id = uuidv4();
+      const toolCalls = Array.isArray(msg.toolCalls) ? (msg.toolCalls as ToolCall[]) : null;
+      const normalizedToolCalls = toolCalls && toolCalls.length > 0 ? toolCalls : null;
       insert.run(
         id,
         conv.id,
         msg.role,
         msg.content,
         msg.reasoningContent || "",
-        msg.toolCalls ? JSON.stringify(msg.toolCalls) : null,
+        normalizedToolCalls ? JSON.stringify(normalizedToolCalls) : null,
         msg.toolCallId || null,
         msg.timestamp ? new Date(msg.timestamp).getTime() : Date.now()
       );

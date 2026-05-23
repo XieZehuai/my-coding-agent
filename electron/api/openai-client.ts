@@ -30,6 +30,17 @@ async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function sanitizeMessages(messages: ChatMessage[]): ChatMessage[] {
+  return messages.map((message) => {
+    if (!message.tool_calls || message.tool_calls.length > 0) {
+      return message;
+    }
+
+    const { tool_calls: _toolCalls, ...rest } = message;
+    return rest;
+  });
+}
+
 export class OpenAIClient {
   async chat(options: ChatOptions): Promise<{ content: string; toolCalls: ToolCall[]; reasoningContent: string }> {
     const { baseUrl, apiKey, model, messages, tools, retry = 3, signal } = options;
@@ -50,7 +61,7 @@ export class OpenAIClient {
           },
           body: JSON.stringify({
             model,
-            messages,
+            messages: sanitizeMessages(messages),
             tools: tools && tools.length > 0 ? tools : undefined,
             stream: false,
             temperature: 0,
@@ -132,7 +143,7 @@ export class OpenAIClient {
           },
           body: JSON.stringify({
             model,
-            messages,
+            messages: sanitizeMessages(messages),
             tools: tools && tools.length > 0 ? tools : undefined,
             stream: true,
             temperature: 0,

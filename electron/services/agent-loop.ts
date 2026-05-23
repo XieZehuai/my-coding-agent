@@ -159,7 +159,7 @@ export class AgentLoop {
       role: "assistant",
       content,
       reasoning_content: reasoningContent || undefined,
-      tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
+      tool_calls: toolCalls.length > 0 ? [...toolCalls] : undefined,
     });
 
     if (toolCalls.length === 0) {
@@ -170,7 +170,7 @@ export class AgentLoop {
       return this.transition("completed");
     }
 
-    this.ctx.pendingTools = toolCalls;
+    this.ctx.pendingTools = [...toolCalls];
     return this.transition("executing_tools");
   }
 
