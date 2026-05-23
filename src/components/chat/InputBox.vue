@@ -112,9 +112,9 @@ async function handleInput() {
   const text = inputText.value;
   const cursorPos = el?.selectionStart ?? 0;
   const textBeforeCursor = text.substring(0, cursorPos);
-  const atMatch = textBeforeCursor.match(/@([^\s]*)$/);
-  const cmdMatch = textBeforeCursor.match(/\/([^\s]*)$/);
-  const skillMatch = textBeforeCursor.match(/#([^\s]*)$/);
+  const atMatch = textBeforeCursor.match(/(?:^|\s)@([^\s]*)$/);
+  const cmdMatch = textBeforeCursor.match(/(?:^|\s)\/([^\s]*)$/);
+  const skillMatch = textBeforeCursor.match(/(?:^|\s)#([^\s]*)$/);
   if (atMatch) {
     showFileSearch.value = true;
     showCmdSearch.value = false;
