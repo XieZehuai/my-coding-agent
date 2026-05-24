@@ -55,13 +55,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { useLayoutStore } from "../../stores/layout";
+import { useConversationStore } from "../../stores/conversation";
 import { useResizable } from "../../composables/useResizable";
 import ResizeHandle from "../layout/ResizeHandle.vue";
 import type { AgentStatus } from "@shared/types";
 
 const layoutStore = useLayoutStore();
+const convStore = useConversationStore();
 
 const status = ref<AgentStatus>({
   convId: "",
@@ -98,12 +100,38 @@ function handleKeydown(e: KeyboardEvent) {
 onMounted(() => {
   document.addEventListener("keydown", handleKeydown);
   window.api.onStatus((data) => {
-    status.value = data as AgentStatus;
+    const s = data as AgentStatus;
+    if (!s.convId || s.convId === convStore.selectedConversationId) {
+      status.value = s;
+    }
   });
 });
+
 onUnmounted(() => {
   document.removeEventListener("keydown", handleKeydown);
 });
+
+watch(
+  () => convStore.selectedConversationId,
+  async (newId) => {
+    if (newId) {
+      status.value = await window.api.getAgentStatus(newId);
+    } else {
+      status.value = {
+        convId: "",
+        state: "idle",
+        round: 0,
+        maxTurns: 50,
+        tokenCount: 0,
+        tokenLimit: 120000,
+        tokenPercent: 0,
+        toolLogs: [],
+        lastCompression: null,
+      };
+    }
+  },
+  { immediate: true }
+);
 </script>
 
 <style scoped>

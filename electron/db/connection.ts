@@ -47,6 +47,14 @@ function initSchema(db: Database.Database) {
       FOREIGN KEY (conv_id) REFERENCES conversations(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS conversation_skills (
+      conv_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      added_at INTEGER NOT NULL,
+      PRIMARY KEY (conv_id, name),
+      FOREIGN KEY (conv_id) REFERENCES conversations(id) ON DELETE CASCADE
+    );
+
     CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conv_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_conversations_project ON conversations(project_id, updated_at);
   `);
@@ -54,6 +62,11 @@ function initSchema(db: Database.Database) {
   // Migration for existing databases
   try {
     db.exec("ALTER TABLE messages ADD COLUMN reasoning_content TEXT NOT NULL DEFAULT ''");
+  } catch {
+    // column already exists
+  }
+  try {
+    db.exec("ALTER TABLE conversations ADD COLUMN trust_mode INTEGER NOT NULL DEFAULT 0");
   } catch {
     // column already exists
   }

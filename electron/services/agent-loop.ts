@@ -34,6 +34,7 @@ export class AgentLoop {
   private client!: OpenAIClient;
   private config!: AppConfig;
   private options: AgentRunOptions;
+  private lastStatusEmit = 0;
 
   constructor(options: AgentRunOptions) {
     this.options = options;
@@ -51,7 +52,7 @@ export class AgentLoop {
     const history = listMessages(convId);
     const messages = buildInitialMessages(userContent, history, projectPath, fileContents);
 
-    const trackedSkills = skillTracker.get(convId);
+    const trackedSkills = skillTracker.get(convId, projectPath);
     if (trackedSkills.length > 0) {
       for (const skill of [...trackedSkills].reverse()) {
         messages.unshift({ role: "system", content: skill.content });
@@ -124,6 +125,7 @@ export class AgentLoop {
         onToken: (token) => {
           content += token;
           emitToRenderer(IPC.EVENT_TOKEN, { convId: this.ctx.convId, token });
+          this.throttledEmitStatus();
         },
         onReasoning: (token) => {
           reasoningContent += token;
@@ -439,6 +441,13 @@ export class AgentLoop {
     };
     convStatus.set(this.ctx.convId, snapshot);
     emitToRenderer(IPC.EVENT_STATUS, snapshot);
+  }
+
+  private throttledEmitStatus(): void {
+    const now = Date.now();
+    if (now - this.lastStatusEmit < 500) return;
+    this.lastStatusEmit = now;
+    this.emitStatus();
   }
 
   private get isTerminal(): boolean {

@@ -5,10 +5,12 @@ import {
   deleteConversation,
   renameConversation,
   getConversation,
+  setConversationTrustMode,
 } from "../db/conversations";
 import { listMessages } from "../db/messages";
 import { getProject } from "../db/projects";
 import { getDb } from "../db/connection";
+import { getConversationSkillNames, saveConversationSkill } from "../db/skills";
 import { UndoService } from "./undo-service";
 import { skillTracker } from "./skill-tracker";
 import { ConversationExport, Conversation, ToolCall } from "../../shared/types";
@@ -60,13 +62,16 @@ export function buildExportData(convId: string): ConversationExport {
   if (!project) throw new Error("Project not found");
 
   const messages = listMessages(convId);
+  const skills = getConversationSkillNames(convId);
 
   return {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     project: { name: project.name, path: project.path },
     conversation: {
       title: conv.title,
+      trustMode: conv.trustMode ?? false,
+      skills: skills.length > 0 ? skills : undefined,
       messages: messages.map((m) => ({
         role: m.role,
         content: m.content,
@@ -86,6 +91,8 @@ export async function importConversationFromFile(projectId: string, filePath: st
     version?: number;
     conversation?: {
       title?: string;
+      trustMode?: boolean;
+      skills?: string[];
       messages?: Array<{
         role: string;
         content: string;
@@ -108,6 +115,16 @@ export async function importConversationFromFile(projectId: string, filePath: st
   }
 
   const conv = createConversation(projectId, data.conversation.title || "Imported");
+
+  if (data.conversation.trustMode) {
+    setConversationTrustMode(conv.id, true);
+  }
+  if (data.conversation.skills && data.conversation.skills.length > 0) {
+    for (const name of data.conversation.skills) {
+      saveConversationSkill(conv.id, name);
+    }
+  }
+
   const db = getDb();
 
   const insert = db.prepare(

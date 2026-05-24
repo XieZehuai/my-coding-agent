@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import type { Conversation } from "@shared/types";
 import { useProjectStore } from "./project";
+import { useTrustModeStore } from "./trustMode";
 
 export const useConversationStore = defineStore("conversation", () => {
   const conversations = ref<Conversation[]>([]);
@@ -22,6 +23,10 @@ export const useConversationStore = defineStore("conversation", () => {
     loading.value = true;
     try {
       conversations.value = await window.api.getConversations(projectStore.selectedProjectId);
+      const trustStore = useTrustModeStore();
+      for (const conv of conversations.value) {
+        trustStore.trustModeMap[conv.id] = conv.trustMode ?? false;
+      }
     } finally {
       loading.value = false;
     }

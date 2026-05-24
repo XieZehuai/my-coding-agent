@@ -20,7 +20,6 @@ export function useAgent() {
     IPC.EVENT_COMPLETE,
     IPC.EVENT_CANCELLED,
     IPC.EVENT_ERROR,
-    IPC.EVENT_STATUS,
     IPC.EVENT_TITLE_GENERATED,
   ];
 

@@ -68,7 +68,7 @@ export function sendChatMessage(convId: string, content: string, trustMode: bool
     for (const name of skillNames) {
       const skillContent = resolveSkill(project.path, name);
       if (skillContent) {
-        skillTracker.add(convId, name, skillContent);
+        skillTracker.add(convId, name);
       }
     }
   }

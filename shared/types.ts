@@ -27,6 +27,7 @@ export interface Conversation {
   id: string;
   projectId: string;
   title: string;
+  trustMode?: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -150,7 +151,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 // ============================================================
 
 export interface ConversationExport {
-  version: 1;
+  version: 1 | 2;
   exportedAt: string;
   project: {
     name: string;
@@ -158,6 +159,8 @@ export interface ConversationExport {
   };
   conversation: {
     title: string;
+    trustMode?: boolean;
+    skills?: string[];
     messages: ExportMessage[];
   };
 }

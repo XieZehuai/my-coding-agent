@@ -1,12 +1,12 @@
-# Coding Agent — 后端架构设计
+# Coding Agent 架构设计
 
 ## 一、整体架构
 
 ```mermaid
 graph TB
     subgraph Renderer["Renderer Process (Vue 3)"]
-        Components["Components"] --> Stores["Pinia Stores"]
-        Stores --> Composable["Composables"]
+        Components["Components"] --> Stores["Pinia Stores<br/>project / conversation / chat<br/>trustMode / theme / layout"]
+        Stores --> Composable["Composables<br/>useAgent / useFileSearch / useResizable"]
         Composable --> API["window.api"]
     end
 
@@ -18,20 +18,25 @@ graph TB
         end
 
         subgraph Services["Services Layer"]
-            AgentSvc["agent-service"]
-            ChatSvc["chat-service"]
-            ConvSvc["conversation-service"]
-            ProjSvc["project-service"]
-            CmdSvc["command-service"]
-            FileSvc["file-service"]
-            UndoSvc["undo-service"]
+            AgentLoop["agent-loop.ts"]
+            AgentSvc["agent-service.ts"]
+            AgentShared["agent-shared.ts"]
+            AgentCtx["agent-context.ts"]
+            ChatSvc["chat-service.ts"]
+            ConvSvc["conversation-service.ts"]
+            ProjSvc["project-service.ts"]
+            CmdSvc["command-service.ts"]
+            FileSvc["file-service.ts"]
+            UndoSvc["undo-service.ts"]
+            SkillSvc["skill-service.ts"]
+            SkillTrk["skill-tracker.ts"]
         end
 
         subgraph Infrastructure["Infrastructure"]
             DB["DB Layer<br/>projects / conversations<br/>messages / undo"]
             API2["API Layer<br/>openai-client"]
-            Tools["Tools Layer<br/>file-tools / cmd-tools<br/>git-tools / registry"]
-            Utils["Utils Layer<br/>config / context-builder"]
+            Tools["Tools Layer<br/>file-tools / command-tools<br/>git-tools / registry"]
+            Utils["Utils Layer<br/>config / context-builder<br/>window-state"]
         end
     end
 
@@ -42,45 +47,56 @@ graph TB
     Services --> Tools
     Services --> Utils
 
-    ExternalAPI["DeepSeek API<br/>(OpenAI 兼容)"]
+    ExternalAPI["DeepSeek API<br/>(OpenAI compatible)"]
     API2 --> ExternalAPI
 ```
+
+
 
 ---
 
 ## 二、分层职责
 
-### 2.1 IPC 层 (`electron/ipc/`)
+## 2.1 IPC layer (`electron/ipc/`)
 
-| 文件          | 职责                                                                                    |
-| ------------- | --------------------------------------------------------------------------------------- |
-| `preload.ts`  | 暴露 `window.api` 给渲染进程（contextBridge），定义所有可用 IPC 通道                    |
-| `register.ts` | 注册所有 `ipcMain.handle`，**只做薄转发**：处理 Electron dialog、调用 service、返回结果 |
-| `handlers.ts` | IPC 注册工具：`registerHandler`、`emitToRenderer`（Main → Renderer 事件推送）           |
 
-**约束：** register.ts 不包含任何业务逻辑。典型 handler 写法：
+| File          | Responsibility                                                                                         |
+| ------------- | ------------------------------------------------------------------------------------------------------ |
+| `preload.ts`  | Expose `window.api` to renderer via contextBridge: invoke methods + event listeners                    |
+| `register.ts` | Register all `ipcMain.handle` as thin forwarding: handle Electron dialog, call service, return result  |
+| `handlers.ts` | IPC infrastructure: `registerHandler`, `removeHandler`, `emitToRenderer` (Main to Renderer event push) |
+
+
+**Constraint:** `register.ts` contains no business logic. Typical handler:
 
 ```ts
 registerHandler(IPC.PROJECT_LIST, async () => {
-  return listAllProjects(); // 1 行委托
+  return listAllProjects();
 });
 ```
 
-### 2.2 Services 层 (`electron/services/`)
+## 2.2 Services layer (`electron/services/`)
 
-业务逻辑编排层，**不依赖 Electron API**（dialog、ipcMain、BrowserWindow 等）。
+Business logic orchestration, **no Electron API dependency** (dialog, ipcMain, BrowserWindow, etc.).
 
-| 文件                      | 职责                                                                   |
-| ------------------------- | ---------------------------------------------------------------------- |
-| `agent-service.ts`        | Agent 循环编排：构建上下文 → 调用 API → 执行工具 → 权限检查 → 流式推送 |
-| `chat-service.ts`         | 消息发送：命令拦截、@file 引用解析、保存用户消息、启动/取消 agent loop |
-| `conversation-service.ts` | 对话管理：CRUD、undo 清理、导出数据构建、导入数据解析                  |
-| `project-service.ts`      | 项目管理：列表、创建（从路径）、删除                                   |
-| `command-service.ts`      | 命令系统：内置命令（/config）、自定义命令解析、命令搜索                |
-| `file-service.ts`         | 文件搜索：递归目录遍历、模糊匹配                                       |
-| `undo-service.ts`         | 撤销管理：文件备份、恢复、清理                                         |
 
-**数据流示例（用户发送消息）：**
+| File                      | Responsibility                                                                                                                   |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `agent-loop.ts`           | Agent Loop state machine: stream API calls, tool execution, permission check, context compression, title generation              |
+| `agent-service.ts`        | Agent public API: `getAgentStatus`, `setTrustMode`, `resolveConfirmation`                                                        |
+| `agent-shared.ts`         | Agent shared constants/state: `TOKEN_LIMIT`, `COMPRESSION_THRESHOLD`, `convTrustMode`, `pendingConfirmations`, `AgentRunOptions` |
+| `agent-context.ts`        | `AgentContext` interface + `buildAgentContext` factory                                                                           |
+| `chat-service.ts`         | Message sending orchestration: `@file` / `#skill` parsing, command interception, save user message, start/cancel AgentLoop       |
+| `conversation-service.ts` | Conversation CRUD, undo cleanup, export data construction, import JSON parsing                                                   |
+| `project-service.ts`      | Project CRUD: list, create (from path), delete                                                                                   |
+| `command-service.ts`      | Command system: built-in (`/config`), custom (`COMMAND.md`) parsing, command search                                              |
+| `file-service.ts`         | File search: recursive directory walk (prefix matching), directory tree generation                                               |
+| `undo-service.ts`         | Undo: file backup to `.agents/backups/<convId>/`, restore, cleanup                                                               |
+| `skill-service.ts`        | Skill system: YAML frontmatter parsing, `.agents/skills/` directory search, SKILL.md reading                                     |
+| `skill-tracker.ts`        | Skill tracking: per-conversation activated skill registry, prevents duplicate injection                                          |
+
+
+**Data flow (user sends message):**
 
 ```mermaid
 sequenceDiagram
@@ -88,102 +104,164 @@ sequenceDiagram
     participant IPC as IPC Layer
     participant CS as ChatService
     participant Cmd as CommandService
-    participant AS as AgentService
+    participant Skill as SkillService
+    participant AS as AgentLoop
     participant API as DeepSeek API
 
-    R->>IPC: chat:send(convId, content)
+    R->>IPC: chat:send(convId, content, trustMode)
     IPC->>CS: sendChatMessage()
     CS->>CS: saveUserMessage()
 
-    alt 以 / 开头
-        CS->>Cmd: resolveCommand()
-        alt 内置命令 (/config)
-            Cmd-->>CS: builtin result
-            CS-->>IPC: emitToRenderer('agent:token')
-            IPC-->>R: event: token (显示结果)
-            CS-->>IPC: emitToRenderer('agent:complete')
-        else 自定义命令 (/git-commit)
-            Cmd-->>CS: COMMAND.md prompt
-            CS->>AS: runAgentLoop(customPrompt)
-            Note over AS: COMMAND.md 注入为 system message
-        end
-    else 普通消息
-        CS->>AS: runAgentLoop()
+    CS->>Skill: parseSkillReferences(content)
+    alt has #skillname
+        Skill-->>CS: skillNames[]
+        CS->>Skill: resolveSkill(name)
+        CS->>CS: skillTracker.add(convId, name, content)
+    end
+
+    CS->>Cmd: resolveCommand(content)
+    alt built-in (/config)
+        Cmd-->>CS: builtin result
+        CS-->>IPC: emitToRenderer('agent:token') x N
+        IPC-->>R: event: token
+        CS-->>IPC: emitToRenderer('agent:complete')
+    else custom command (/git-commit)
+        Cmd-->>CS: customPrompt (COMMAND.md)
+        CS->>AS: new AgentLoop({ customPrompt })
+        Note over AS: COMMAND.md injected as system message
+    else normal message
+        CS->>CS: parseFileReferences(@file:xxx)
+        CS->>AS: new AgentLoop({ fileContents })
     end
 
     loop Agent Loop
         AS->>API: POST /chat/completions (stream)
-        API-->>AS: SSE tokens
+        API-->>AS: SSE tokens + reasoning + tool_calls
         AS-->>IPC: emitToRenderer('agent:token')
         IPC-->>R: event: token
-        AS->>AS: executeTool()
+        AS-->>IPC: emitToRenderer('agent:reasoning')
+        IPC-->>R: event: reasoning
+        AS->>AS: executeTool() and permission check
+        alt permission = ask
+            AS-->>IPC: emitToRenderer('agent:ask')
+            IPC-->>R: event: ask (PermissionModal)
+            R->>IPC: agent:confirm(askId, approved)
+            IPC->>AS: resolveConfirmation()
+        end
         AS-->>IPC: emitToRenderer('agent:tool-start')
-        IPC-->>R: event: tool-start
-        AS-->>IPC: emitToRenderer('agent:tool-end')
-        IPC-->>R: event: tool-end
+        AS-->>IPC: emitToRenderer('agent:tool-end' / 'agent:tool-error')
+    end
+
+    opt first response complete
+        AS->>API: non-stream request for title
+        AS-->>IPC: emitToRenderer('agent:title-generated')
     end
 
     AS-->>IPC: emitToRenderer('agent:complete')
     IPC-->>R: event: complete
 ```
 
-### 2.3 Utils 层 (`electron/utils/`)
 
-纯函数工具，无副作用，无外部服务依赖。
 
-| 文件        | 职责                                                                 |
-| ----------- | -------------------------------------------------------------------- |
-| `config.ts` | 读取 `.agents/config.toml`，`env:` 前缀解析，权限/重试/maxTurns 校验 |
+## 2.3 Utils layer (`electron/utils/`)
 
-**配置文件格式 (`.agents/config.toml`)：**
+Pure function utilities, no side effects, no external service dependencies.
+
+
+| File                 | Responsibility                                                                                                                                           |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `config.ts`          | Read `.agents/config.toml`, `env:` prefix resolution, retry range validation [0,5], permission value validation                                          |
+| `context-builder.ts` | Build API request context: system prompt (with project structure tree), @file contents, history messages, token estimation (char/4), context compression |
+| `window-state.ts`    | Window position/size persistence to `userData/window-state.json`, cross-display visibility check, debounced save                                         |
+
+
+**System Prompt structure (`context-builder.ts`):**
+
+```
+You are Coding Agent, an AI assistant for software development on Windows.
+|-- Available Tools
+|-- Workflow
+|-- Guidelines
+|-- Current Project (project path + 2-level directory tree)
+```
+
+**Config file format (`.agents/config.toml`):**
 
 ```toml
 [api]
 base_url = "https://api.deepseek.com/v1"
-api_key = "env:DEEPSEEK_API_KEY"   # env: 前缀 = 读环境变量
+api_key = "env:DEEPSEEK_API_KEY"
 model = "deepseek-chat"
-retry = 3                          # [0, 5]
+retry = 3
 
 [permissions]
-read = "always"                    # always | ask | deny
+read = "always"
 write = "ask"
 execute = "ask"
 
-max_turns = 50                     # 最大 agent 轮次，默认 50
+max_turns = 50
 ```
 
-| `context-builder.ts` | 构建 API 请求上下文：system prompt、项目结构树、@file 内容、历史消息、token 估算、上下文压缩 |
+## 2.4 Tools layer (`electron/tools/`)
 
-### 2.4 Tools 层 (`electron/tools/`)
+AI-callable tool implementations (8 total). Each defined in OpenAI function calling format, routed by category.
 
-AI 可调用的工具实现。每个 tool 以 OpenAI function calling 格式定义。
 
-| 文件               | 职责                                                                                |
-| ------------------ | ----------------------------------------------------------------------------------- |
-| `registry.ts`      | 工具注册表：定义所有 tool 的 schema、权限分类、执行路由                             |
-| `file-tools.ts`    | 文件操作：`read_file`、`write_file`、`list_directory`、`glob_search`、`grep_search` |
-| `command-tools.ts` | 命令执行：`run_command`（PowerShell，120s 超时）                                    |
-| `git-tools.ts`     | Git 操作：`git_status`、`git_diff`                                                  |
+| File               | Responsibility                                                                                                                      |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `registry.ts`      | Tool registry: 8 ToolDefinition schemas, `getPermissionCategory`, `executeTool` router                                              |
+| `file-tools.ts`    | File ops: `read_file`(line range), `write_file`(auto-create dirs + backup callback), `list_directory`, `glob_search`, `grep_search` |
+| `command-tools.ts` | Command execution: `run_command` (PowerShell, 120s timeout, stdout+stderr merged)                                                   |
+| `git-tools.ts`     | Git ops: `git_status`(`git status --short`), `git_diff`(`git diff`), 30s timeout                                                    |
 
-### 2.5 API 层 (`electron/api/`)
 
-| 文件               | 职责                                                                                                                  |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `openai-client.ts` | OpenAI 兼容 HTTP 客户端：流式/非流式 chat、SSE 解析、重试（指数退避）、AbortController 支持、`reasoning_content` 捕获 |
+**Tool permission categories:**
 
-### 2.6 DB 层 (`electron/db/`)
 
-基于 better-sqlite3（同步 API，WAL 模式）。
+| Tool             | Category | Notes                        |
+| ---------------- | -------- | ---------------------------- |
+| `read_file`      | read     | Read file                    |
+| `write_file`     | write    | Write file (triggers backup) |
+| `list_directory` | read     | List directory               |
+| `glob_search`    | read     | Glob pattern search          |
+| `grep_search`    | read     | Regex content search         |
+| `run_command`    | execute  | Execute command              |
+| `git_status`     | read     | Git status                   |
+| `git_diff`       | read     | Git diff                     |
 
-| 文件               | 职责                                |
-| ------------------ | ----------------------------------- |
-| `connection.ts`    | 数据库连接初始化、Schema 创建、迁移 |
-| `projects.ts`      | 项目 CRUD                           |
-| `conversations.ts` | 对话 CRUD                           |
-| `messages.ts`      | 消息 CRUD（含 `reasoning_content`） |
-| `undo.ts`          | 撤销状态持久化                      |
 
-**数据模型：**
+All tools enforce path security validation (`resolvePath`), blocking access outside the project root.
+
+## 2.5 API layer (`electron/api/`)
+
+
+| File               | Responsibility                                                                                                                                                                                                                             |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `openai-client.ts` | OpenAI-compatible HTTP client: `chat()` (non-stream) and `chatStream()` (SSE parsing), tool_calls incremental aggregation, exponential backoff retry (429/5xx), AbortController cancellation, `sanitizeMessages` to strip empty tool_calls |
+
+
+**SSE parsing highlights:**
+
+- `ReadableStream` reader with line-by-line `data:` prefix parsing
+- `reasoning_content` delta as separate event stream
+- `tool_calls` incremental aggregation (by index: id/name/arguments)
+- Fixed `temperature: 0`
+
+## 2.6 DB layer (`electron/db/`)
+
+Based on better-sqlite3 (sync API, WAL mode, foreign_keys ON).
+
+
+| File               | Responsibility                                                                        |
+| ------------------ | ------------------------------------------------------------------------------------- |
+| `connection.ts`    | DB connection init, schema creation, column migration                                 |
+| `projects.ts`      | Project CRUD (includes `getProjectByPath`)                                            |
+| `conversations.ts` | Conversation CRUD (links `touchProject`)                                              |
+| `messages.ts`      | Message CRUD (with `reasoning_content`, `tool_calls` JSON, `getLastAssistantMessage`) |
+| `undo.ts`          | Undo state persistence (Upsert mode)                                                  |
+
+
+**Data model:**
 
 ```mermaid
 erDiagram
@@ -194,7 +272,7 @@ erDiagram
     Project {
         string id PK
         string name
-        string path
+        string path UK
         int created_at
         int updated_at
     }
@@ -210,26 +288,30 @@ erDiagram
     Message {
         string id PK
         string conv_id FK
-        string role
+        string role "user|assistant|system|tool"
         string content
         string reasoning_content
-        string tool_calls
-        string tool_call_id
+        string tool_calls "JSON | NULL"
+        string tool_call_id "NULL"
         int created_at
     }
 
     ConversationUndo {
         string conv_id PK
-        string created_files
-        string modified_files
+        string created_files "JSON array"
+        string modified_files "JSON array"
     }
 ```
 
+
+
+**Indexes:** `idx_messages_conv(conv_id, created_at)`, `idx_conversations_project(project_id, updated_at)`
+
 ---
 
-## 三、核心流程
+## 三、Core flows
 
-### 3.1 Agent Loop 状态机
+## 3.1 Agent Loop state machine
 
 ```mermaid
 stateDiagram-v2
@@ -239,250 +321,340 @@ stateDiagram-v2
     state STREAMING {
         [*] --> Streaming
         Streaming --> Compressing : token > 90%
-        Compressing --> Streaming : 压缩完成
-        Streaming --> CheckingTools : API 响应
+        Compressing --> Streaming : compression done (non-stream API summary)
+        Streaming --> HasToolCalls : API response has tool_calls
+        Streaming --> COMPLETED : API response has no tool_calls
     }
 
-    CheckingTools --> COMPLETED : 无 tool call
-    CheckingTools --> PREFLIGHT : 有 tool call
+    HasToolCalls --> EXECUTING_TOOLS : start tool execution queue
 
-    PREFLIGHT --> EXECUTING : 权限 = always
-    PREFLIGHT --> WAITING_USER : 权限 = ask
-    PREFLIGHT --> ToolSkipped : 权限 = deny
+    EXECUTING_TOOLS --> EXECUTING_TOOLS : process pendingTools[]
+    EXECUTING_TOOLS --> PREFLIGHT : pop next tool
+    EXECUTING_TOOLS --> NextRound : pendingTools empty
 
-    WAITING_USER --> EXECUTING : 用户允许
-    WAITING_USER --> ToolSkipped : 用户拒绝
+    PREFLIGHT --> ExecuteNow : permission = always / trustMode
+    PREFLIGHT --> WAITING_USER : permission = ask
+    PREFLIGHT --> ToolDenied : permission = deny
 
-    EXECUTING --> ToolDone : 成功
-    EXECUTING --> ToolError : 失败/超时
+    WAITING_USER --> ExecuteNow : user approved
+    WAITING_USER --> ToolDenied : user denied
 
-    ToolDone --> MoreTools : 当前 turn 还有 tool
-    ToolError --> MoreTools : 当前 turn 还有 tool
-    ToolSkipped --> MoreTools : 当前 turn 还有 tool
+    ExecuteNow --> ToolDone : execution success
+    ExecuteNow --> ToolError : execution failed/timeout
+    ToolDenied --> EXECUTING_TOOLS : continue next tool
 
-    MoreTools --> PREFLIGHT : turn < MAX_TURNS
-    MoreTools --> COMPLETED : turn >= MAX_TURNS
+    ToolDone --> EXECUTING_TOOLS : more pending tools
+    ToolError --> EXECUTING_TOOLS : more pending tools
 
-    ToolDone --> NextTurn : 所有 tool 执行完
-    ToolError --> NextTurn : 所有 tool 执行完
-    ToolSkipped --> NextTurn : 所有 tool 执行完
+    NextRound --> STREAMING : round <= maxTurns
+    NextRound --> COMPLETED : round > maxTurns
 
-    NextTurn --> STREAMING : turn < MAX_TURNS
-    NextTurn --> COMPLETED : turn >= MAX_TURNS
-
-    STREAMING --> CANCELLED : 用户取消
-    PREFLIGHT --> CANCELLED : 用户取消
-    WAITING_USER --> CANCELLED : 用户取消
-    EXECUTING --> CANCELLED : 用户取消
+    STREAMING --> CANCELLED : user cancelled
+    EXECUTING_TOOLS --> CANCELLED : user cancelled
+    WAITING_USER --> CANCELLED : user cancelled
 
     COMPLETED --> [*]
     CANCELLED --> [*]
+    ERROR --> [*]
 ```
 
-**关键参数：**
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| max_turns | 50 | 最大 agent 轮次（可在 config.toml 中配置） |
-| TOKEN_LIMIT | 120000 | DeepSeek V3 128K，留 buffer |
-| COMPRESSION_THRESHOLD | 90% | 触发上下文压缩的 token 比例 |
-| CMD_TIMEOUT | 120s | 命令执行超时 |
 
-### 3.2 权限模型
+
+**Key parameters:**
+
+
+| Parameter              | Default | Description                                         |
+| ---------------------- | ------- | --------------------------------------------------- |
+| max_turns              | 50      | Max agent rounds (configurable in config.toml)      |
+| TOKEN_LIMIT            | 120000  | DeepSeek V3 128K, leaving buffer                    |
+| COMPRESSION_THRESHOLD  | 0.9     | Token ratio triggering context compression          |
+| CMD_TIMEOUT            | 120s    | Command execution timeout                           |
+| STATUS_THROTTLE        | 500ms   | Status push throttle during token streaming         |
+| TOOL_RESULT_TRUNCATION | 5000    | Frontend display truncation length for tool results |
+
+
+## 3.2 Context compression
+
+Triggers when token count exceeds `TOKEN_LIMIT * COMPRESSION_THRESHOLD`:
+
+1. Enter `compressing` state
+2. Generate conversation summary via **non-stream API** call (in Chinese)
+3. `compressContext()` retains system prompt + summary + last 5 turns
+4. Return to `streaming` state
+
+```ts
+// Compressed message structure
+[
+  systemPrompt,                                       // original system prompt
+  { role: "system", content: "<memory>\n{summary}\n</memory>" },
+  ...recentMessages,                                  // last 5 user/assistant/tool turns
+]
+```
+
+## 3.3 Permission model
 
 ```mermaid
 flowchart LR
-    A[Tool 执行请求] --> B{Trust Mode?}
-    B -->|ON| E[always 允许]
-    B -->|OFF| C{Config 权限}
+    A[Tool execution request] --> B{Trust Mode?}
+    B -->|ON| E[always allowed]
+    B -->|OFF| C{Config permission}
     C -->|always| E
-    C -->|ask| F[弹出确认弹窗]
-    C -->|deny| G[拒绝执行]
-    F -->|用户允许| E
-    F -->|用户拒绝| G
-    F -->|Allow All| H[开启 Trust Mode]
+    C -->|ask| F[Show PermissionModal]
+    C -->|deny| G[Deny + record error message]
+    F -->|User approved| E
+    F -->|User denied| G
+    F -->|Allow All| H[Enable Trust Mode]
     H --> E
 ```
 
-双层权限：
 
-- **Config 层**：`.agents/config.toml` 中的 `[permissions]` 基线
-- **Trust Mode 层**：前端 toggle 或 "Allow All This Turn" 按钮 → IPC → `convTrustMode` Map
 
-### 3.3 流式事件
+Two-layer permissions:
 
-**Main → Renderer 事件：**
+- **Config layer**: `.agents/config.toml` `[permissions]` baseline (`read` / `write` / `execute`)
+- **Trust Mode layer**: frontend toggle or modal "Allow All" button, IPC to `convTrustMode` Map (per-conversation, lifetime = single AgentLoop)
 
-| 事件                    | 触发时机         | 携带数据                                    |
-| ----------------------- | ---------------- | ------------------------------------------- |
-| `agent:token`           | 每个 delta token | `{ convId, token }`                         |
-| `agent:tool-start`      | 工具开始执行     | `{ convId, toolName, toolCallId, args }`    |
-| `agent:tool-end`        | 工具执行完成     | `{ convId, toolCallId, result }`            |
-| `agent:tool-error`      | 工具执行失败     | `{ convId, toolCallId, error }`             |
-| `agent:ask`             | 需要用户确认     | `{ convId, askId, toolName, detail }`       |
-| `agent:complete`        | Agent loop 结束  | `{ convId }`                                |
-| `agent:cancelled`       | 用户取消         | `{ convId }`                                |
-| `agent:error`           | 致命错误         | `{ convId, error }`                         |
-| `agent:status`          | Loop 状态更新    | `{ convId, state, round, tokenCount, ... }` |
-| `agent:title-generated` | AI 生成标题      | `{ convId, title }`                         |
+## 3.4 Streaming events
 
-**Renderer → Main（invoke）：**
+**Main to Renderer (`webContents.send`):**
 
-| 通道                  | 说明                                            |
-| --------------------- | ----------------------------------------------- |
-| `project:list`        | 获取所有项目                                    |
-| `project:add`         | 打开文件夹选择器，添加项目                      |
-| `project:remove`      | 删除项目                                        |
-| `conversation:list`   | 获取项目下的对话列表                            |
-| `conversation:create` | 创建新对话                                      |
-| `conversation:delete` | 删除对话                                        |
-| `conversation:rename` | 重命名对话                                      |
-| `conversation:undo`   | 撤销对话中的文件修改                            |
-| `conversation:export` | 导出对话为 JSON                                 |
-| `conversation:import` | 从 JSON 导入对话                                |
-| `message:list`        | 获取对话的消息列表                              |
-| `chat:send`           | 发送消息、启动 agent loop（异步，立即返回 ack） |
-| `chat:cancel`         | 取消当前 agent loop                             |
-| `agent:confirm`       | 用户确认/拒绝权限                               |
-| `agent:set-trust`     | 设置 trust mode                                 |
-| `agent:status`        | 获取 agent 运行状态                             |
-| `file:search`         | 模糊搜索项目文件（@ 补全）                      |
-| `command:search`      | 搜索可用命令（/ 补全）                          |
-| `config:read`         | 读取项目配置                                    |
+
+| Event                   | Trigger                  | Data                                                             |
+| ----------------------- | ------------------------ | ---------------------------------------------------------------- |
+| `agent:token`           | Each delta token         | `{ convId, token }`                                              |
+| `agent:reasoning`       | Each reasoning delta     | `{ convId, token }`                                              |
+| `agent:tool-start`      | Tool execution starts    | `{ convId, toolName, toolCallId, args }`                         |
+| `agent:tool-end`        | Tool execution completes | `{ convId, toolCallId, result }` (truncated to 5000 chars)       |
+| `agent:tool-error`      | Tool execution fails     | `{ convId, toolCallId, error }`                                  |
+| `agent:ask`             | User confirmation needed | `{ convId, askId, toolName, detail }`                            |
+| `agent:complete`        | Agent loop ends          | `{ convId }`                                                     |
+| `agent:cancelled`       | User cancelled           | `{ convId }`                                                     |
+| `agent:error`           | Fatal error              | `{ convId, error }`                                              |
+| `agent:status`          | Loop status update       | `AgentStatusSnapshot` (state, round, tokenCount, toolLogs, etc.) |
+| `agent:title-generated` | AI generated title       | `{ convId, title }` (title <= 15 characters)                     |
+
+
+**Renderer to Main (`ipcRenderer.invoke`):**
+
+
+| Channel               | Description                                                    |
+| --------------------- | -------------------------------------------------------------- |
+| `project:list`        | Get all projects (by updated_at desc)                          |
+| `project:add`         | Open folder picker, add project                                |
+| `project:remove`      | Delete project (cascade delete convs + messages)               |
+| `conversation:list`   | Get project conversation list                                  |
+| `conversation:create` | Create new conversation                                        |
+| `conversation:delete` | Delete conversation (with undo cleanup + skill cleanup)        |
+| `conversation:rename` | Rename conversation                                            |
+| `conversation:undo`   | Undo all file changes (restore backups + delete created files) |
+| `conversation:export` | Export conversation as JSON (save dialog)                      |
+| `conversation:import` | Import conversation from JSON (file picker)                    |
+| `message:list`        | Get conversation messages (by created_at asc)                  |
+| `chat:send`           | Send message, start AgentLoop (async, immediate ack)           |
+| `chat:cancel`         | Cancel current AgentLoop (abort AbortController)               |
+| `agent:confirm`       | User confirms/denies permission                                |
+| `agent:set-trust`     | Set per-conversation trust mode                                |
+| `agent:status`        | Get agent runtime status snapshot                              |
+| `file:search`         | Fuzzy search project files (@ autocomplete, 20 max)            |
+| `command:search`      | Search available commands (/ autocomplete, built-in + custom)  |
+| `skill:search`        | Search available skills (# autocomplete)                       |
+| `config:read`         | Read project `.agents/config.toml` config                      |
+
 
 ---
 
-## 四、Commands 系统
+## 四、Commands system
 
-### 4.1 概述
+## 4.1 Overview
 
-支持两类命令：内置命令（硬编码）和自定义命令（`COMMAND.md`）。
+Two command types: built-in (hardcoded) and custom (`COMMAND.md`).
 
 ```
 .agents/
-├── config.toml
-└── commands/              ← 用户自定义命令
-    └── git-commit/
-        └── COMMAND.md     ← 命令指令（Markdown）
+|-- config.toml
+|-- commands/
+|   `-- git-commit/
+|       `-- COMMAND.md
+|-- skills/
+|   `-- frontend-design/
+|       `-- SKILL.md
+`-- backups/
+    `-- <convId>/
 ```
 
-### 4.2 命令解析流程
+## 4.2 Command resolution flow
 
 ```mermaid
 flowchart TD
-    A[用户输入 /xxx] --> B{内置命令?}
-    B -->|是| C[本地执行]
-    C --> D[返回结果消息]
-    B -->|否| E{.agents/commands/xxx/COMMAND.md 存在?}
-    E -->|是| F[读取 COMMAND.md]
-    F --> G[注入为 system message]
-    G --> H[启动 Agent Loop]
-    E -->|否| I[原样发送给 AI]
+    A[User enters /xxx] --> B{Built-in?}
+    B -->|Yes| C[Local execute /config]
+    C --> D[Return result (char-by-char token push)]
+    B -->|No| E{.agents/commands/xxx/COMMAND.md exists?}
+    E -->|Yes| F[Read COMMAND.md]
+    F --> G[Inject as system message]
+    G --> H[Start AgentLoop]
+    E -->|No| I[Send to AI as-is]
 ```
 
-### 4.3 内置命令
 
-| 命令      | 行为                                                                |
-| --------- | ------------------------------------------------------------------- |
-| `/config` | 创建 `.agents/` + `config.toml`（如不存在），已存在则追加缺失配置项 |
 
-### 4.4 自定义命令
+## 4.3 Built-in commands
 
-`COMMAND.md` 内容作为 system prompt 注入到 AI 上下文最前面，AI 据此执行。
 
-示例 `.agents/commands/git-commit/COMMAND.md`：
+| Command   | Behavior                                                                     |
+| --------- | ---------------------------------------------------------------------------- |
+| `/config` | Create `.agents/` + `config.toml` (if missing), or merge missing config keys |
 
-```markdown
-# Git Commit
 
-Analyze the current git diff and generate a concise commit message.
-Then execute:
-git add .
-git commit -m "<message>"
+## 4.4 Custom commands
 
-Guidelines:
+`COMMAND.md` content injected as system prompt at the front of AI context.
 
-- Use conventional commits format (feat/fix/refactor/etc.)
-- Keep message under 72 characters
-```
+Input `/git-commit` or `/git-commit extra notes` triggers it (`/command` prefix removed, extra text becomes `userContent`).
 
-输入 `/git-commit` 或 `/git-commit 额外说明` 触发。
+## 4.5 Frontend autocomplete
 
-### 4.5 前端补全
-
-输入 `/` 自动弹出命令下拉列表（内置 + 自定义），Tab/Enter 选择，↑↓ 导航。
+- Type `/` to show command dropdown (built-in + custom), Tab/Enter to select
+- Type `#` to search `.agents/skills/` directory, show skill list
+- Type `@` to search project files, recursive fuzzy matching
 
 ---
 
-## 五、目录结构
+## 五、Skills system
+
+## 5.1 Overview
+
+Skills defined in `.agents/skills/<name>/SKILL.md`, format: YAML frontmatter + Markdown body:
+
+```markdown
+---
+name: frontend-design
+description: Create distinctive, production-grade frontend interfaces...
+---
+
+# Frontend Design Skill
+
+## Workflow
+1. ...
+```
+
+## 5.2 Skill activation and injection
+
+1. User enters `#skillname` to activate a skill
+2. `chat-service.ts` calls `skillTracker.add(convId, name, content)`
+3. On each AgentLoop start, all tracked conversation skills are injected as system messages in reverse order (after custom prompt)
+4. Same skill is never injected twice in the same conversation
+
+## 5.3 Frontend autocomplete
+
+On `#`, `skill-service.searchSkills()` scans `.agents/skills/` subdirectories, parses `SKILL.md` frontmatter, returns `{ name, description }`.
+
+---
+
+## 六、Directory structure
 
 ```
 coding-agent/
-├── docs/
-│   └── architecture.md          ← 本文档
-├── shared/
-│   └── types.ts                 ← 前后端共享类型
-├── electron/                    ← Main Process
-│   ├── main.ts                  ← 入口：窗口创建、IPC 注册、DB 生命周期
-│   ├── preload.ts               ← contextBridge API
-│   ├── ipc/
-│   │   ├── register.ts          ← IPC handler 注册（薄转发）
-│   │   └── handlers.ts          ← 注册/事件工具函数
-│   ├── services/                ← 业务逻辑编排
-│   │   ├── agent-service.ts     ← Agent Loop
-│   │   ├── chat-service.ts      ← 消息发送 + 命令拦截
-│   │   ├── conversation-service.ts ← 对话管理
-│   │   ├── project-service.ts   ← 项目管理
-│   │   ├── command-service.ts   ← 命令系统
-│   │   ├── file-service.ts      ← 文件搜索
-│   │   └── undo-service.ts      ← 撤销管理
-│   ├── tools/                   ← AI 可调用工具
-│   │   ├── registry.ts          ← 工具注册 + schema
-│   │   ├── file-tools.ts
-│   │   ├── command-tools.ts
-│   │   └── git-tools.ts
-│   ├── api/
-│   │   └── openai-client.ts     ← OpenAI 兼容 HTTP 客户端
-│   ├── db/                      ← 数据访问层
-│   │   ├── connection.ts        ← 连接 + schema
-│   │   ├── projects.ts
-│   │   ├── conversations.ts
-│   │   ├── messages.ts
-│   │   └── undo.ts
-│   └── utils/                   ← 纯函数工具
-│       ├── config.ts            ← .agents/config.toml 解析
-│       └── context-builder.ts   ← API context 构建
-├── src/                         ← Renderer Process (Vue 3)
-│   ├── App.vue
-│   ├── main.ts
-│   ├── components/
-│   │   ├── layout/       (AppLayout, ErrorBoundary)
-│   │   ├── sidebar/      (ProjectList, ConversationList)
-│   │   ├── chat/          (ChatWindow, MessageList, MessageBubble, InputBox)
-│   │   ├── modals/        (PermissionModal)
-│   │   └── dev/           (DevPanel)
-│   ├── stores/            (project, conversation, chat, trustMode)
-│   ├── composables/       (useAgent, useFileSearch)
-│   └── types/             (message)
-├── resources/
-├── package.json
-├── vite.config.ts
-├── tsconfig.json / .node / .web
-└── electron-builder.json5
+|-- docs/
+|   |-- architecture.md
+|   `-- TODO.md
+|-- shared/
+|   `-- types.ts
+|-- electron/
+|   |-- main.ts
+|   |-- preload.ts
+|   |-- ipc/
+|   |   |-- register.ts
+|   |   `-- handlers.ts
+|   |-- services/
+|   |   |-- agent-loop.ts
+|   |   |-- agent-service.ts
+|   |   |-- agent-shared.ts
+|   |   |-- agent-context.ts
+|   |   |-- chat-service.ts
+|   |   |-- conversation-service.ts
+|   |   |-- project-service.ts
+|   |   |-- command-service.ts
+|   |   |-- file-service.ts
+|   |   |-- undo-service.ts
+|   |   |-- skill-service.ts
+|   |   `-- skill-tracker.ts
+|   |-- tools/
+|   |   |-- registry.ts
+|   |   |-- file-tools.ts
+|   |   |-- command-tools.ts
+|   |   `-- git-tools.ts
+|   |-- api/
+|   |   `-- openai-client.ts
+|   |-- db/
+|   |   |-- connection.ts
+|   |   |-- projects.ts
+|   |   |-- conversations.ts
+|   |   |-- messages.ts
+|   |   `-- undo.ts
+|   `-- utils/
+|       |-- config.ts
+|       |-- context-builder.ts
+|       `-- window-state.ts
+|-- src/
+|   |-- App.vue
+|   |-- main.ts
+|   |-- env.d.ts
+|   |-- components/
+|   |   |-- layout/       (AppLayout, ErrorBoundary, ThemeToggle, ResizeHandle)
+|   |   |-- sidebar/      (ProjectList, ConversationList)
+|   |   |-- chat/          (ChatWindow, MessageList, MessageBubble, ToolCallCard, InputBox)
+|   |   |-- modals/        (PermissionModal)
+|   |   |-- diff/          (DiffViewer)
+|   |   `-- dev/           (DevPanel)
+|   |-- stores/            (project, conversation, chat, trustMode, theme, layout)
+|   |-- composables/       (useAgent, useFileSearch, useResizable)
+|   |-- types/             (message)
+|   `-- styles/            (theme.css)
+|-- .agents/
+|   |-- config.toml
+|   |-- commands/
+|   `-- skills/
+|-- resources/
+|-- index.html
+|-- package.json
+|-- vite.config.ts
+|-- tsconfig.json / .node / .web
+`-- electron-builder.json5
 ```
 
 ---
 
-## 六、技术栈
+## 七、Tech stack
 
-| 层          | 技术                              |
-| ----------- | --------------------------------- |
-| 桌面框架    | Electron 33                       |
-| 前端        | Vue 3 + TypeScript + Pinia + Vite |
-| 后端        | Node.js (Electron Main Process)   |
-| 数据库      | better-sqlite3 (WAL, 同步 API)    |
-| HTTP 客户端 | fetch (Node 20 内置)              |
-| Markdown    | marked                            |
-| 配置解析    | smol-toml                         |
-| 文件搜索    | glob (npm)                        |
-| 构建        | electron-builder (NSIS)           |
-| AI API      | DeepSeek (OpenAI 兼容)            |
+
+| Layer          | Tech                                           |
+| -------------- | ---------------------------------------------- |
+| Desktop        | Electron 33                                    |
+| Frontend       | Vue 3 + TypeScript + Pinia + Vite              |
+| Backend        | Node.js (Electron Main Process)                |
+| Database       | better-sqlite3 (WAL, sync API, foreign_keys)   |
+| HTTP client    | fetch (Node 20 built-in)                       |
+| Markdown       | marked                                         |
+| Config         | smol-toml                                      |
+| UUID           | uuid                                           |
+| File search    | glob (npm)                                     |
+| Build          | vite-plugin-electron + electron-builder (NSIS) |
+| Code quality   | ESLint + Prettier + vue-tsc                    |
+| AI API         | DeepSeek (OpenAI compatible)                   |
+| Native rebuild | electron-rebuild (better-sqlite3, postinstall) |
+
+
+---
+
+## 八、Key design decisions
+
+1. **Agent service split into 4 files**: `agent-loop` (state machine), `agent-service` (public API), `agent-shared` (shared state/constants), `agent-context` (context construction). Avoids single-file bloat with clear separation of concerns.
+2. **Skill system vs Command system**: `/command` is one-shot (COMMAND.md re-read each trigger), `#skill` is persistent (active for entire conversation lifecycle, tracked by `skill-tracker`).
+3. **Context compression uses non-stream API**: Summary generation is a short completion task; non-stream avoids SSE parsing overhead and is more reliable.
+4. **Permission model is tool-category based** (read/write/execute), not per-tool. This keeps the config simple while giving users meaningful control.
+5. **Undo via file backup**: Before every `write_file`, the original file content is copied to `.agents/backups/<convId>/`. Undo restores backups and deletes newly created files.
+6. **Title generation is fire-and-forget**: Non-blocking async call after first assistant response; failure is silently ignored.
+7. **Tool results truncated for frontend display**: Full results saved to DB, but UI display capped at 5000 characters to avoid rendering huge tool outputs.
+8. `**temperature: 0` fixed**: All API calls use `temperature: 0` for deterministic, predictable behavior.
+

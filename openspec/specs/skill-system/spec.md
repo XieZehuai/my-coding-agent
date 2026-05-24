@@ -68,7 +68,7 @@ The `runAgentLoop` function SHALL read tracked skills for the conversation from 
 - **THEN** the message order SHALL be: skill content, command content, base system prompt
 
 ### Requirement: Conversation-level skill persistence
-The system SHALL maintain a per-conversation skill tracking map that persists within the conversation session (in-memory). When a `#skill-name` token is resolved for the first time in a conversation, the skill SHALL be added to the tracking set. On subsequent messages in the same conversation, tracked skills SHALL be automatically re-injected without requiring the `#` token.
+The system SHALL maintain a per-conversation skill tracking map that persists across application sessions via SQLite. When a `#skill-name` token is resolved for the first time in a conversation, the skill name SHALL be stored in the `conversation_skills` table. On subsequent messages in the same conversation, tracked skills SHALL be automatically re-injected without requiring the `#` token. On application restart, tracked skills SHALL be reloaded from the database and re-resolved from disk.
 
 #### Scenario: Skill persists to next message
 - **WHEN** user sends "#frontend-design 创建登录页" then sends "把按钮改成蓝色"
@@ -82,6 +82,10 @@ The system SHALL maintain a per-conversation skill tracking map that persists wi
 - **WHEN** user sends "#frontend-design 做A" then sends "#frontend-design 做B"
 - **THEN** the skill SHALL NOT be injected twice; the existing tracking entry SHALL be unchanged
 
-#### Scenario: Tracking cleared on conversation end
-- **WHEN** the app restarts or the conversation is deleted
-- **THEN** the tracking map entry for that conversation SHALL be cleared
+#### Scenario: Tracking persists across app restart
+- **WHEN** the app restarts and the user reopens a conversation that had tracked skills
+- **THEN** the tracked skills SHALL be reloaded from SQLite and re-injected into subsequent agent runs
+
+#### Scenario: Tracking cleared on conversation deletion
+- **WHEN** the conversation is deleted
+- **THEN** the tracking entries for that conversation SHALL be cleared from both the in-memory map and the database

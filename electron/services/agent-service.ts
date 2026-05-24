@@ -5,6 +5,7 @@ import {
   TOKEN_LIMIT,
   type AgentStatusSnapshot,
 } from "./agent-shared";
+import { setConversationTrustMode } from "../db/conversations";
 
 export { AgentLoop } from "./agent-loop";
 export { type AgentRunOptions, type AgentStatusSnapshot } from "./agent-shared";
@@ -27,6 +28,7 @@ export function getAgentStatus(convId: string): AgentStatusSnapshot {
 
 export function setTrustMode(convId: string, enabled: boolean) {
   convTrustMode.set(convId, enabled);
+  setConversationTrustMode(convId, enabled);
 }
 
 export function resolveConfirmation(askId: string, approved: boolean) {
