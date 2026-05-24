@@ -7,16 +7,10 @@ import { renameConversation } from "../db/conversations";
 import { emitToRenderer } from "../ipc/handlers";
 import { readConfig } from "../utils/config";
 import { UndoService } from "./undo-service";
-import { skillTracker } from "./skill-tracker";
+import { resolveSkill } from "./skill-service";
 import { AgentContext, buildAgentContext } from "./agent-context";
-import {
-  AgentRunOptions,
-  TOKEN_LIMIT,
-  COMPRESSION_THRESHOLD,
-  convTrustMode,
-  pendingConfirmations,
-  convStatus,
-} from "./agent-shared";
+import { ConversationRuntime } from "./conversation-runtime";
+import { AgentRunOptions, TOKEN_LIMIT, COMPRESSION_THRESHOLD } from "./agent-shared";
 
 export type State =
   | "idle"
@@ -34,16 +28,19 @@ export class AgentLoop {
   private client!: OpenAIClient;
   private config!: AppConfig;
   private options: AgentRunOptions;
+  private runtime: ConversationRuntime;
   private lastStatusEmit = 0;
 
-  constructor(options: AgentRunOptions) {
+  constructor(options: AgentRunOptions, runtime: ConversationRuntime) {
     this.options = options;
+    this.runtime = runtime;
   }
 
   async start(): Promise<void> {
     const { convId, projectPath, userContent, fileContents, customPrompt } = this.options;
 
-    convTrustMode.set(convId, this.options.trustMode);
+    // trustMode mirror lives on the runtime; service layer set it before start()
+    this.runtime.trustMode = this.options.trustMode;
 
     this.config = readConfig(projectPath);
     this.client = new OpenAIClient();
@@ -52,10 +49,12 @@ export class AgentLoop {
     const history = listMessages(convId);
     const messages = buildInitialMessages(userContent, history, projectPath, fileContents);
 
-    const trackedSkills = skillTracker.get(convId, projectPath);
+    const trackedSkills = this.runtime.getSkillsContent(projectPath, resolveSkill);
     if (trackedSkills.length > 0) {
       for (const skill of [...trackedSkills].reverse()) {
-        messages.unshift({ role: "system", content: skill.content });
+        if (skill.content) {
+          messages.unshift({ role: "system", content: skill.content });
+        }
       }
     }
 
@@ -220,7 +219,7 @@ export class AgentLoop {
     emitToRenderer(IPC.EVENT_TOOL_START, { convId: this.ctx.convId, toolName, toolCallId: tcId, args });
 
     const category = getPermissionCategory(toolName);
-    const permission = convTrustMode.get(this.ctx.convId) ? "always" : this.config.permissions[category];
+    const permission = this.runtime.trustMode ? "always" : this.config.permissions[category];
 
     if (permission === "deny") {
       this.ctx.pendingTools.shift();
@@ -250,7 +249,7 @@ export class AgentLoop {
 
   private async doWaitUser(): Promise<void> {
     const askId = this.ctx.pendingAskId!;
-    const approved = await waitForConfirmation(askId, this.ctx.signal);
+    const approved = await this.waitForConfirmation(askId, this.ctx.signal);
 
     if (this.ctx.signal.aborted) {
       this.ctx.pendingAskId = null;
@@ -439,7 +438,7 @@ export class AgentLoop {
       toolLogs: [...this.ctx.toolLogs],
       lastCompression: null,
     };
-    convStatus.set(this.ctx.convId, snapshot);
+    this.runtime.updateStatus(snapshot);
     emitToRenderer(IPC.EVENT_STATUS, snapshot);
   }
 
@@ -453,6 +452,30 @@ export class AgentLoop {
   private get isTerminal(): boolean {
     return ["completed", "cancelled", "error"].includes(this.state);
   }
+
+  private waitForConfirmation(askId: string, signal: AbortSignal): Promise<boolean> {
+    const runtime = this.runtime;
+    return new Promise((resolve) => {
+      let settled = false;
+
+      function finish(approved: boolean) {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener("abort", onAbort);
+        // resolveAsk is a no-op for an already-removed ask, so safe to call
+        // even when finish() was triggered by abort/dispose (which removes it).
+        runtime.resolveAsk(askId, approved);
+        resolve(approved);
+      }
+
+      function onAbort() {
+        finish(false);
+      }
+
+      runtime.registerAsk(askId, finish);
+      signal.addEventListener("abort", onAbort, { once: true });
+    });
+  }
 }
 
 type ParsedToolArguments = { ok: true; args: Record<string, unknown> } | { ok: false; error: string };
@@ -463,25 +486,4 @@ function parseToolArguments(raw: string | undefined): ParsedToolArguments {
   } catch {
     return { ok: false, error: `Invalid tool arguments JSON: ${(raw || "").slice(0, 120)}` };
   }
-}
-
-function waitForConfirmation(askId: string, signal: AbortSignal): Promise<boolean> {
-  return new Promise((resolve) => {
-    let settled = false;
-
-    function finish(approved: boolean) {
-      if (settled) return;
-      settled = true;
-      signal.removeEventListener("abort", onAbort);
-      pendingConfirmations.delete(askId);
-      resolve(approved);
-    }
-
-    function onAbort() {
-      finish(false);
-    }
-
-    pendingConfirmations.set(askId, { resolve: finish });
-    signal.addEventListener("abort", onAbort, { once: true });
-  });
 }

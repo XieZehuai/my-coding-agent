@@ -10,9 +10,9 @@ import {
 import { listMessages } from "../db/messages";
 import { getProject } from "../db/projects";
 import { getDb } from "../db/connection";
-import { getConversationSkillNames, saveConversationSkill } from "../db/skills";
+import { getConversationSkillNames, saveConversationSkill, deleteConversationSkills } from "../db/skills";
 import { UndoService } from "./undo-service";
-import { skillTracker } from "./skill-tracker";
+import { conversationRegistry } from "./conversation-registry";
 import { ConversationExport, Conversation, ToolCall } from "../../shared/types";
 
 export function listProjectConversations(projectId: string) {
@@ -24,6 +24,11 @@ export function newConversation(projectId: string) {
 }
 
 export function removeConversation(id: string) {
+  // Dispose runtime first: aborts in-flight loop, rejects pending asks,
+  // clears in-memory caches. Done before DB delete so the loop terminates
+  // before its rows go away.
+  conversationRegistry.dispose(id);
+
   const conv = getConversation(id);
   if (conv) {
     const project = getProject(conv.projectId);
@@ -32,7 +37,7 @@ export function removeConversation(id: string) {
       undo.cleanup();
     }
   }
-  skillTracker.clear(id);
+  deleteConversationSkills(id);
   deleteConversation(id);
 }
 

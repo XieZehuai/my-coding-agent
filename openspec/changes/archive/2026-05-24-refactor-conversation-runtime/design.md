@@ -192,3 +192,72 @@ Renderer-side change in `useAgent.confirmAsk`: already has access to current `co
 - **`StatusReporter` injection mechanism for Phase 5.** Should the runtime hold a reporter reference, or should the registry inject one when constructing? Defer to Phase 5 proposal.
 
 - **Test runner.** This change makes `ConversationRuntime` unit-testable but adds no tests because the project has no test runner yet. Phase 2+ may justify adding `vitest`. Tracked as future scope.
+
+## Retrospective (post-implementation)
+
+### Decision deviations
+
+**Trust-mode mirror added to runtime (deviates from §Component Shapes "no `trustMode` field" note).**
+
+The original design said trust mode would be read once from DB at agent-start time and kept in `AgentContext`. During implementation we recognized this would silently break the existing "Allow All This Turn" UX: when the user clicks that button mid-loop, `trustStore.setTrusted(convId, true)` writes to DB, and the next tool execution must observe the new value. With trust read once at start, it would be missed.
+
+Resolution: added `trustMode: boolean` field on `ConversationRuntime` as an in-memory mirror, with the Decision 1 double-write pattern (`agent-service.setTrustMode` writes both `runtime.trustMode` and DB). `agent-loop.ts:222` now reads `this.runtime.trustMode` per tool execution. `loadTrustModeFromDb(convId)` exists for explicit warm-up if ever needed; in practice `chat-service.sendChatMessage` writes the runtime mirror via `runtime.trustMode = options.trustMode` at the start of each `agent.start()` call, so the runtime is always consistent for the duration of a loop.
+
+This is functionally equivalent to the old `convTrustMode` Map, just owned by the runtime instead of a global.
+
+**Runtime warming layer added (regression discovered during 9.7).**
+
+Manual test 9.7 revealed that the original `skill-tracker.get(convId, projectPath)` had a DB lazy-load fallback for the case "memory empty but DB has rows" (e.g. after app restart). The first migration draft did not preserve this — `runtime.getSkillsContent` only resolved already-tracked names, treating absence as "no skills". Result: skill references made in a previous app session were silently dropped after restart.
+
+The Decision 1 boundary forbids putting DB IO into the runtime. Resolution: `chat-service` owns a `warmRuntime(runtime, convId)` helper that runs once per runtime lifecycle (gated by `runtime.warmed` flag), reading skill names from DB and pre-populating the runtime. Same hook also warms `trustMode` for symmetry (though trustMode is also pushed in via `options.trustMode` shortly after).
+
+This adds one extra concept (warming) but keeps the layering clean: runtime stays memory-only; service layer owns the DB → runtime hydration step. Future per-conv state that has DB persistence (e.g. tool logs) can extend `warmRuntime` without touching runtime internals.
+
+**`AskInfo` extended with `convId` (anticipated, formalized).**
+
+Frontend `AskInfo` (in `src/stores/chat.ts:5`) gained a `convId` field so `PermissionModal.vue` can pass it through `confirmAsk(convId, askId, approved)`. The original design noted this implicitly ("frontend has convId in closure scope") but left the data path through `chatStore.pendingAsk` undefined. Resolution: extended `AskInfo` to carry `convId` from `EVENT_ASK` payload (which already had it) → store → modal → IPC.
+
+**Defensive abort-old-controller in `sendChatMessage`.**
+
+Added `if (runtime.controller) runtime.controller.abort()` before assigning a new controller. This was not in the original tasks but was a documented exploration risk (#7 from the architecture review) that required only one extra line in this same file. Recorded here for traceability.
+
+**`conversationRegistry.peek(convId)` accessor.**
+
+Added a `peek` method (returns `undefined` if absent, no lazy-create) for the cancel/getStatus path where lazy-creating a runtime for a non-existent conversation would be wrong (e.g. cancel on a conversation that has no active loop should return `false`, not create state).
+
+### Decisions that held up
+
+- Decision 1 (runtime memory-only, service layer owns DB writes) — clean throughout. Service-layer call sites that need both writes (`setTrustMode`, skill add) both happen in obvious places.
+- Decision 2 (pendingAsks runtime-local, frontend sends convId) — wire-protocol change rippled to exactly the predicted callsites: `preload.ts`, `register.ts`, `useAgent.confirmAsk`, `PermissionModal.vue`, plus the `AskInfo` type extension noted above.
+- Decision 3 (delete skill-tracker.ts) — clean. `chat-service` owns the double-write at one site; `agent-loop` reads via `runtime.getSkillsContent` with `resolveSkill` callback injected.
+- Decision 4 (StatusReporter deferred to Phase 5) — no Phase 5 work leaked in. `AgentLoop` still calls `emitToRenderer` directly; the only emit path that changed is `runtime.updateStatus` on top of the status emit.
+- Decision 5 (phased + documented) — Phase boundaries held. `tasks.md` 9.2-9.8 manual tests deliberately deferred to runtime; 10.1 retrospective written here.
+
+### Lint and typecheck baseline
+
+`npx vue-tsc --noEmit`: clean (0 errors). `npx eslint .`: 23 problems unchanged from pre-refactor baseline (all pre-existing). No new issues introduced by this change.
+
+### Files touched (final inventory)
+
+```
+NEW:
+  electron/services/conversation-runtime.ts        (164 lines)
+  electron/services/conversation-registry.ts       (47 lines)
+
+MODIFIED:
+  electron/main.ts                                 (+2 lines: disposeAll on quit)
+  electron/preload.ts                              (confirmAsk signature)
+  electron/ipc/register.ts                         (AGENT_CONFIRM handler)
+  electron/services/agent-service.ts               (rewrote 3 functions)
+  electron/services/agent-shared.ts                (removed 3 Maps)
+  electron/services/agent-loop.ts                  (constructor+runtime field+method waitForConfirmation)
+  electron/services/chat-service.ts                (uses registry, abort-prev guard)
+  electron/services/conversation-service.ts        (dispose runtime first, deleteConversationSkills explicit)
+  shared/types.ts                                  (doc comment on AGENT_CONFIRM)
+  src/stores/chat.ts                               (AskInfo.convId)
+  src/composables/useAgent.ts                      (confirmAsk signature, showAsk passes convId)
+  src/components/modals/PermissionModal.vue        (3 confirmAsk callsites)
+
+DELETED:
+  electron/services/skill-tracker.ts               (-44 lines)
+```

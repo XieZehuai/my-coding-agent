@@ -93,8 +93,18 @@ async function handleSelect(id: string) {
 }
 async function handleDelete() {
   if (contextMenu.convId) {
-    chatStore.reset();
-    await convStore.deleteConversation(contextMenu.convId);
+    const target = contextMenu.convId;
+    const isActive = target === convStore.selectedConversationId;
+    await convStore.deleteConversation(target);
+    if (isActive) {
+      // Active conversation was deleted: clear chat state and load the
+      // next selected conversation's messages (deleteConversation already
+      // updated selectedConversationId to the next one, or null).
+      chatStore.reset();
+      const next = convStore.selectedConversationId;
+      if (next) await chatStore.loadMessages(next);
+    }
+    // If we deleted a non-active conversation, leave the current chat alone.
   }
   hideContextMenu();
 }

@@ -27,16 +27,16 @@ const trustStore = useTrustModeStore();
 const { confirmAsk } = useAgent();
 
 function handleAllow() {
-  if (chatStore.pendingAsk) confirmAsk(chatStore.pendingAsk.askId, true);
+  if (chatStore.pendingAsk) confirmAsk(chatStore.pendingAsk.convId, chatStore.pendingAsk.askId, true);
 }
 function handleAllowAll() {
   if (chatStore.pendingAsk) {
     if (convStore.selectedConversationId) trustStore.setTrusted(convStore.selectedConversationId, true);
-    confirmAsk(chatStore.pendingAsk.askId, true);
+    confirmAsk(chatStore.pendingAsk.convId, chatStore.pendingAsk.askId, true);
   }
 }
 function handleDeny() {
-  if (chatStore.pendingAsk) confirmAsk(chatStore.pendingAsk.askId, false);
+  if (chatStore.pendingAsk) confirmAsk(chatStore.pendingAsk.convId, chatStore.pendingAsk.askId, false);
 }
 </script>
 

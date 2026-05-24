@@ -1,17 +1,35 @@
 import * as fs from "fs";
 import * as path from "path";
-import { getConversation } from "../db/conversations";
+import { getConversation, getConversationTrustMode } from "../db/conversations";
 import { getProject } from "../db/projects";
 import { saveUserMessage, saveAssistantMessage } from "../db/messages";
+import { saveConversationSkill, getConversationSkillNames } from "../db/skills";
 import { AgentLoop } from "./agent-service";
 import { resolveCommand } from "./command-service";
 import { parseSkillReferences, resolveSkill } from "./skill-service";
-import { skillTracker } from "./skill-tracker";
 import { listDirectory } from "./file-service";
+import { conversationRegistry } from "./conversation-registry";
+import { ConversationRuntime } from "./conversation-runtime";
 import { IPC } from "../../shared/types";
 import { emitToRenderer } from "../ipc/handlers";
 
-const agentControllers = new Map<string, AbortController>();
+/**
+ * Hydrate a freshly-created runtime from DB (skill names + trustMode).
+ * Idempotent: safe to call multiple times; only does work on first call.
+ *
+ * Lives at the service layer, not on the runtime, because runtime stays
+ * memory-only (Decision 1: DB IO is service-layer concern).
+ */
+function warmRuntime(runtime: ConversationRuntime, convId: string): void {
+  if (runtime.warmed) return;
+  runtime.warmed = true;
+
+  const skillNames = getConversationSkillNames(convId);
+  for (const name of skillNames) {
+    runtime.addSkill(name);
+  }
+  runtime.trustMode = getConversationTrustMode(convId);
+}
 
 export function parseFileReferences(
   content: string,
@@ -56,7 +74,13 @@ export function sendChatMessage(convId: string, content: string, trustMode: bool
 
   saveUserMessage(convId, content);
 
-  // Parse #skill references and track new skills
+  // Lazy-create runtime; persists across sends within this conversation.
+  const runtime = conversationRegistry.get(convId);
+  // Warm from DB on first access in this app session (skills, trustMode).
+  // No-op if already warmed.
+  warmRuntime(runtime, convId);
+
+  // Parse #skill references and track new skills (double-write: runtime + DB)
   let contentForProcessing = content;
   const { skillNames } = parseSkillReferences(content);
   if (skillNames.length > 0) {
@@ -68,7 +92,8 @@ export function sendChatMessage(convId: string, content: string, trustMode: bool
     for (const name of skillNames) {
       const skillContent = resolveSkill(project.path, name);
       if (skillContent) {
-        skillTracker.add(convId, name);
+        runtime.addSkill(name);
+        saveConversationSkill(convId, name);
       }
     }
   }
@@ -101,37 +126,46 @@ export function sendChatMessage(convId: string, content: string, trustMode: bool
     fileContents = parsed.fileContents;
   }
 
-  const ac = new AbortController();
-  agentControllers.set(convId, ac);
+  // Defensive: if a previous loop is still running for this conv, abort it.
+  // Normal UI flow disables input while isActive, but this guards races.
+  if (runtime.controller) {
+    runtime.controller.abort();
+  }
 
-  const agent = new AgentLoop({
-    convId,
-    projectId: conv.projectId,
-    projectPath: project.path,
-    userContent: cleanContent,
-    fileContents,
-    signal: ac.signal,
-    trustMode,
-    customPrompt,
-  });
+  const ac = new AbortController();
+  runtime.controller = ac;
+
+  const agent = new AgentLoop(
+    {
+      convId,
+      projectId: conv.projectId,
+      projectPath: project.path,
+      userContent: cleanContent,
+      fileContents,
+      signal: ac.signal,
+      trustMode,
+      customPrompt,
+    },
+    runtime
+  );
   agent
     .start()
     .catch((e) => {
       emitToRenderer(IPC.EVENT_ERROR, { convId, error: (e as Error).message || String(e) });
     })
     .finally(() => {
-      agentControllers.delete(convId);
+      // Only clear if this is still the active controller (not replaced by a
+      // newer send). Runtime survives across sends.
+      if (runtime.controller === ac) {
+        runtime.controller = null;
+      }
     });
 }
 
 export function cancelChat(convId: string): boolean {
-  const ac = agentControllers.get(convId);
-  if (ac) {
-    ac.abort();
-    agentControllers.delete(convId);
-    return true;
-  }
-  return false;
+  const runtime = conversationRegistry.peek(convId);
+  if (!runtime) return false;
+  return runtime.abortCurrent();
 }
 
 function handleBuiltinCommand(convId: string, result: string) {

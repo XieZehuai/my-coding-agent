@@ -23,7 +23,8 @@ const api = {
   cancelMessage: (convId: string) => ipcRenderer.invoke(IPC.CHAT_CANCEL, convId),
 
   // Agent confirmation
-  confirmAsk: (id: string, approved: boolean) => ipcRenderer.invoke(IPC.AGENT_CONFIRM, id, approved),
+  confirmAsk: (convId: string, askId: string, approved: boolean) =>
+    ipcRenderer.invoke(IPC.AGENT_CONFIRM, convId, askId, approved),
   setTrustMode: (convId: string, enabled: boolean) => ipcRenderer.invoke(IPC.AGENT_SET_TRUST, convId, enabled),
 
   // File search

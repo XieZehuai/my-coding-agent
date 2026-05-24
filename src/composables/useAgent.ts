@@ -84,6 +84,7 @@ export function useAgent() {
     window.api.onAsk((data) => {
       if (data.convId === convId) {
         chatStore.showAsk({
+          convId: data.convId,
           askId: data.askId,
           toolName: data.toolName,
           detail: data.detail,
@@ -119,9 +120,9 @@ export function useAgent() {
     return window.api.cancelMessage(convId);
   }
 
-  async function confirmAsk(askId: string, approved: boolean) {
+  async function confirmAsk(convId: string, askId: string, approved: boolean) {
     chatStore.clearAsk();
-    return window.api.confirmAsk(askId, approved);
+    return window.api.confirmAsk(convId, askId, approved);
   }
 
   return {

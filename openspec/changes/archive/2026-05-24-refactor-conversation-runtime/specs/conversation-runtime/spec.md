@@ -99,3 +99,13 @@ The `AgentLoop` class SHALL NOT import or mutate module-level state from `agent-
 
 - **WHEN** the agent loop enters `waiting_user` state and needs a permission decision
 - **THEN** the `waitForConfirmation` helper SHALL register the resolver via `this.runtime.registerAsk(askId, finish)` and clean it up by relying on `runtime.resolveAsk` or `runtime.rejectAllAsks` during abort/dispose
+
+## Implementation Evidence
+
+| Requirement | Primary file:line(s) |
+|---|---|
+| Per-conversation runtime container | `electron/services/conversation-runtime.ts:50` (class), `electron/services/conversation-registry.ts:15` (lazy create) |
+| Deterministic runtime disposal | `electron/services/conversation-runtime.ts:72` (`dispose()`), `electron/services/conversation-registry.ts:29` (registry-side), `electron/main.ts:54` (app quit hook), `electron/services/conversation-service.ts:26` (per-conversation delete) |
+| Runtime-local permission ask routing | `electron/preload.ts:26` (IPC signature), `electron/ipc/register.ts:96` (handler), `electron/services/agent-service.ts:34` (route through registry), `electron/services/agent-loop.ts:455` (`waitForConfirmation` method) |
+| Skills tracked per-runtime | `electron/services/conversation-runtime.ts:138` (`addSkill`/`getSkillsContent`), `electron/services/chat-service.ts:72` (double-write site), `electron/services/agent-loop.ts:52` (read via runtime in `start()`) |
+| AgentLoop decoupled from module globals | `electron/services/agent-loop.ts:1-13` (imports — no agent-shared Maps), `electron/services/agent-shared.ts` (Maps removed, only types/constants remain), `electron/services/agent-loop.ts:30` (`runtime` field) |

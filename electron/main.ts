@@ -3,6 +3,7 @@ import { join } from "path";
 import { registerAllHandlers } from "./ipc/register";
 import { closeDb } from "./db/connection";
 import { applyWindowState, loadWindowState, trackWindowState, windowOptionsFromState } from "./utils/window-state";
+import { conversationRegistry } from "./services/conversation-registry";
 
 process.env.DIST_ELECTRON = join(__dirname);
 process.env.DIST = join(process.env.DIST_ELECTRON, "../dist");
@@ -57,5 +58,6 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  conversationRegistry.disposeAll();
   closeDb();
 });

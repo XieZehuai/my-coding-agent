@@ -93,8 +93,8 @@ export function registerAllHandlers() {
   // ============================================================
   // Agent Handlers
   // ============================================================
-  registerHandler(IPC.AGENT_CONFIRM, async (_event, askId: string, approved: boolean) => {
-    resolveConfirmation(askId, approved);
+  registerHandler(IPC.AGENT_CONFIRM, async (_event, convId: string, askId: string, approved: boolean) => {
+    resolveConfirmation(convId, askId, approved);
     return true;
   });
 

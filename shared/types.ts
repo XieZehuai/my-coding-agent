@@ -203,7 +203,7 @@ export const IPC = {
   CHAT_CANCEL: "chat:cancel",
 
   // Agent
-  AGENT_CONFIRM: "agent:confirm",
+  AGENT_CONFIRM: "agent:confirm", // payload: (convId, askId, approved)
   AGENT_STATUS: "agent:status",
   AGENT_SET_TRUST: "agent:set-trust",
 

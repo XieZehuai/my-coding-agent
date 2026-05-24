@@ -3,6 +3,7 @@ import { ref, computed } from "vue";
 import type { Message, AgentState, ToolCall } from "@shared/types";
 
 export interface AskInfo {
+  convId: string;
   askId: string;
   toolName: string;
   detail: string;
