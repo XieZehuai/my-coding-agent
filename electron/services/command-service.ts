@@ -102,7 +102,10 @@ function runConfigCommand(projectPath: string): string {
 }
 
 function generateDefaultConfig(): string {
-  return `[api]
+  return `[agent]
+max_turns = ${DEFAULT_CONFIG.maxTurns}
+
+[api]
 base_url = "${DEFAULT_CONFIG.api.baseUrl}"
 api_key = "env:DEEPSEEK_API_KEY"
 model = "${DEFAULT_CONFIG.api.model}"
@@ -112,8 +115,6 @@ retry = ${DEFAULT_CONFIG.api.retry}
 read = "always"
 write = "ask"
 execute = "ask"
-
-max_turns = ${DEFAULT_CONFIG.maxTurns}
 `;
 }
 
@@ -126,9 +127,8 @@ function getMissingKeys(existing: string): string[] {
       `retry = ${DEFAULT_CONFIG.api.retry}`,
     ],
     "[permissions]": ['read = "always"', 'write = "ask"', 'execute = "ask"'],
+    "[agent]": [`max_turns = ${DEFAULT_CONFIG.maxTurns}`],
   };
-
-  const globalDefaults = [`max_turns = ${DEFAULT_CONFIG.maxTurns}`];
 
   const missing: string[] = [];
 
@@ -142,13 +142,6 @@ function getMissingKeys(existing: string): string[] {
       if (!existing.includes(keyName)) {
         missing.push(key);
       }
-    }
-  }
-
-  for (const key of globalDefaults) {
-    const keyName = key.split(" = ")[0];
-    if (!existing.includes(keyName)) {
-      missing.push(key);
     }
   }
 

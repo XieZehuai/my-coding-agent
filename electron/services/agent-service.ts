@@ -1,5 +1,5 @@
 import { TOKEN_LIMIT, type AgentStatusSnapshot } from "./agent-shared";
-import { setConversationTrustMode, getConversationTrustMode } from "../db/conversations";
+import { setConversationTrustMode } from "../db/conversations";
 import { conversationRegistry } from "./conversation-registry";
 
 export { AgentLoop } from "./agent-loop";
@@ -25,12 +25,6 @@ export function setTrustMode(convId: string, enabled: boolean) {
   // Double-write: in-memory runtime mirror + DB persistence
   conversationRegistry.get(convId).trustMode = enabled;
   setConversationTrustMode(convId, enabled);
-}
-
-export function loadTrustModeFromDb(convId: string): boolean {
-  const value = getConversationTrustMode(convId);
-  conversationRegistry.get(convId).trustMode = value;
-  return value;
 }
 
 export function resolveConfirmation(convId: string, askId: string, approved: boolean) {

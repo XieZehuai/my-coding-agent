@@ -61,10 +61,12 @@ coding-agent/
 │   ├── services/                    # 业务逻辑层
 │   │   ├── agent-loop.ts            # Agent 循环状态机
 │   │   ├── agent-service.ts         # Agent 公共 API
-│   │   ├── agent-shared.ts          # Agent 共享状态与常量
+│   │   ├── agent-shared.ts          # Agent 共享类型与常量
 │   │   ├── agent-context.ts         # 上下文构建
 │   │   ├── chat-service.ts          # 消息发送编排
-│   │   ├── conversation-service.ts  # 对话 CRUD
+│   │   ├── conversation-service.ts  # 对话 CRUD + 导入导出
+│   │   ├── conversation-runtime.ts  # 对话运行时容器（内存状态）
+│   │   ├── conversation-registry.ts # 对话运行时注册表
 │   │   ├── project-service.ts       # 项目管理
 │   │   ├── command-service.ts       # 命令解析与执行
 │   │   ├── file-service.ts          # 文件搜索
@@ -142,6 +144,7 @@ read = "always"
 write = "ask"
 execute = "ask"
 
+[agent]
 max_turns = 50
 ```
 
@@ -189,32 +192,40 @@ npm run build:renderer
 
 ## 架构概览
 
-```mermaid
-flowchart TB
-    subgraph Electron["Electron"]
-        subgraph Main["Main Process"]
-            IPC["IPC Handlers"]
-            Service["Service Layer<br/>(agent/chat/conversation/project/...)"]
-            DB["DB (SQL)"]
-            Tools["Tools Registry"]
-
-            IPC --> Service
-            Service --> DB
-            Service --> Tools
-            Service --> DeepSeek["DeepSeek API<br/>(OpenAI-compatible)"]
-        end
-
-        subgraph Renderer["Renderer Process"]
-            API["window.api"]
-            Stores["Pinia Stores<br/>(project/conv/chat/theme...)"]
-            Components["Vue Components<br/>(ChatWindow/MessageList/DiffViewer...)"]
-
-            API --> Stores
-            Stores --> Components
-        end
-
-        API <--> IPC
-    end
+```
++-------------------------------------------------------------------------------+
+|                                   Electron                                    |
+|                                                                               |
+|  +-----------------------------------+        +----------------------------+  |
+|  |           Main Process            |        |      Renderer Process      |  |
+|  |                                   |        |                            |  |
+|  |  +-----------------------------+  |        |  +----------------------+  |  |
+|  |  |        IPC Handlers         |<------------>|      window.api      |  |  |
+|  |  +-------------+---------------+  |        |  +----------+-----------+  |  |
+|  |                |                  |        |             |              |  |
+|  |                v                  |        |             v              |  |
+|  |  +-----------------------------+  |        |  +----------------------+  |  |
+|  |  |        Service Layer        |  |        |  |     Pinia Stores     |  |  |
+|  |  | agent / chat / conversation |  |        |  | project / conv       |  |  |
+|  |  | project / ...               |  |        |  | chat / theme / ...   |  |  |
+|  |  +------+------+---------------+  |        |  +----------+-----------+  |  |
+|  |         |      |                  |        |             |              |  |
+|  |         |      |                  |        |             v              |  |
+|  |         v      v                  |        |  +----------------------+  |  |
+|  |  +---------+  +----------------+  |        |  |    Vue Components    |  |  |
+|  |  | DB SQL  |  | Tools Registry |  |        |  | ChatWindow           |  |  |
+|  |  +---------+  +----------------+  |        |  | MessageList          |  |  |
+|  |                                   |        |  | DiffViewer / ...     |  |  |
+|  |                |                  |        |  +----------------------+  |  |
+|  |                v                  |        |                            |  |
+|  |  +-----------------------------+  |        +----------------------------+  |
+|  |  |        DeepSeek API         |  |                                        |
+|  |  |   OpenAI-compatible API     |  |                                        |
+|  |  +-----------------------------+  |                                        |
+|  |                                   |                                        |
+|  +-----------------------------------+                                        |
+|                                                                               |
++-------------------------------------------------------------------------------+
 
 ```
 

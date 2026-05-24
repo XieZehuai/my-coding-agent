@@ -10,6 +10,7 @@ import { parseSkillReferences, resolveSkill } from "./skill-service";
 import { listDirectory } from "./file-service";
 import { conversationRegistry } from "./conversation-registry";
 import { ConversationRuntime } from "./conversation-runtime";
+import { readConfig } from "../utils/config";
 import { IPC } from "../../shared/types";
 import { emitToRenderer } from "../ipc/handlers";
 
@@ -135,7 +136,11 @@ export function sendChatMessage(convId: string, content: string, trustMode: bool
   const ac = new AbortController();
   runtime.controller = ac;
 
+  // Read config once per conversation — AgentLoop no longer reads disk.
+  const config = readConfig(project.path);
+
   const agent = new AgentLoop(
+    config,
     {
       convId,
       projectId: conv.projectId,

@@ -2,14 +2,24 @@
   <div class="sidebar-section conversations-section">
     <div class="section-header">
       <span>Conversations</span>
-      <button
-        class="btn-icon"
-        :disabled="!projectStore.selectedProjectId"
-        @click="handleCreate"
-        title="New Conversation"
-      >
-        +
-      </button>
+      <div class="header-actions">
+        <button
+          class="btn-icon"
+          :disabled="!projectStore.selectedProjectId"
+          @click="handleImportClick"
+          title="Import Conversation"
+        >
+          &#10549;
+        </button>
+        <button
+          class="btn-icon"
+          :disabled="!projectStore.selectedProjectId"
+          @click="handleCreate"
+          title="New Conversation"
+        >
+          +
+        </button>
+      </div>
     </div>
     <div class="section-list conversation-list">
       <div
@@ -50,7 +60,6 @@
       <button @click="handleDelete">Delete</button>
       <button @click="handleUndo">Undo Changes</button>
       <button @click="handleExport">Export</button>
-      <button @click="handleImport">Import</button>
     </div>
   </div>
 </template>
@@ -119,12 +128,11 @@ async function handleExport() {
   if (contextMenu.convId) await window.api.exportConversation(contextMenu.convId);
   hideContextMenu();
 }
-async function handleImport() {
+async function handleImportClick() {
   if (projectStore.selectedProjectId) {
     await window.api.importConversation(projectStore.selectedProjectId);
     await convStore.loadConversations();
   }
-  hideContextMenu();
 }
 
 async function startRename(conv: { id: string; title: string }) {
@@ -185,6 +193,10 @@ function formatDate(ts: number): string {
 .btn-icon:disabled {
   opacity: 0.3;
   cursor: default;
+}
+.header-actions {
+  display: flex;
+  gap: 2px;
 }
 .section-list {
   flex: 1;

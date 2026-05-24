@@ -47,13 +47,14 @@ export function readConfig(projectPath: string): AppConfig {
   try {
     parsed = toml.parse(raw) as Record<string, unknown>;
   } catch (e) {
-    throw new Error(`Failed to parse .agents/config.toml: ${(e as Error).message}`);
+    throw new Error(`Failed to parse .agents/config.toml: ${e instanceof Error ? e.message : String(e)}`, { cause: e });
   }
 
   const apiSection = (parsed.api as Record<string, unknown>) || {};
   const permSection = (parsed.permissions as Record<string, unknown>) || {};
+  const agentSection = (parsed.agent as Record<string, unknown>) || {};
 
-  const maxTurnsRaw = Number(parsed.max_turns);
+  const maxTurnsRaw = Number(agentSection.max_turns);
   const maxTurns = Number.isFinite(maxTurnsRaw) && maxTurnsRaw >= 1 ? maxTurnsRaw : DEFAULT_CONFIG.maxTurns;
 
   const api: ApiConfig = {

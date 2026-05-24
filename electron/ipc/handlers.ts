@@ -20,7 +20,9 @@ export function removeHandler(channel: string) {
 export function emitToRenderer(channel: string, data: unknown) {
   const windows = BrowserWindow.getAllWindows();
   for (const win of windows) {
-    win.webContents.send(channel, data);
+    if (!win.isDestroyed()) {
+      win.webContents.send(channel, data);
+    }
   }
 }
 

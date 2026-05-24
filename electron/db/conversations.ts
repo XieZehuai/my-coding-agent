@@ -7,7 +7,7 @@ export function listConversations(projectId: string): Conversation[] {
   const db = getDb();
   return db
     .prepare(
-      "SELECT id, project_id as projectId, title, trust_mode as trustMode, created_at as createdAt, updated_at as updatedAt FROM conversations WHERE project_id = ? ORDER BY updated_at DESC"
+      "SELECT id, project_id as projectId, title, trust_mode as trustMode, created_at as createdAt, updated_at as updatedAt FROM conversations WHERE project_id = ? ORDER BY created_at DESC"
     )
     .all(projectId) as Conversation[];
 }

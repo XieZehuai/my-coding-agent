@@ -5,7 +5,6 @@ import { buildInitialMessages, countTokens, compressContext, hasAssistantRespons
 import { listMessages, saveAssistantMessage, saveToolMessage } from "../db/messages";
 import { renameConversation } from "../db/conversations";
 import { emitToRenderer } from "../ipc/handlers";
-import { readConfig } from "../utils/config";
 import { UndoService } from "./undo-service";
 import { resolveSkill } from "./skill-service";
 import { AgentContext, buildAgentContext } from "./agent-context";
@@ -26,12 +25,13 @@ export class AgentLoop {
   private state: State = "idle";
   private ctx!: AgentContext;
   private client!: OpenAIClient;
-  private config!: AppConfig;
+  private config: AppConfig;
   private options: AgentRunOptions;
   private runtime: ConversationRuntime;
   private lastStatusEmit = 0;
 
-  constructor(options: AgentRunOptions, runtime: ConversationRuntime) {
+  constructor(config: AppConfig, options: AgentRunOptions, runtime: ConversationRuntime) {
+    this.config = config;
     this.options = options;
     this.runtime = runtime;
   }
@@ -42,7 +42,6 @@ export class AgentLoop {
     // trustMode mirror lives on the runtime; service layer set it before start()
     this.runtime.trustMode = this.options.trustMode;
 
-    this.config = readConfig(projectPath);
     this.client = new OpenAIClient();
     const undoService = new UndoService(convId, projectPath);
 

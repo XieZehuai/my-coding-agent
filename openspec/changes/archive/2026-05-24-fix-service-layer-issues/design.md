@@ -28,10 +28,20 @@ Single-line guard. Zero performance cost.
 
 ### Decision 4: AppConfig cache strategy
 
-`chat-service.sendChatMessage` already calls `readConfig(projectPath)` — move it from `AgentLoop.start()` to there. Store in `AgentRunOptions` or as a new constructor param. AgentLoop receives config as an immutable input, no longer reading disk.
+`chat-service.sendChatMessage` already calls `readConfig(projectPath)` — move it from `AgentLoop.start()` to there. Store as a constructor param. AgentLoop receives config as an immutable input.
+
+### Decision 5 (added during implementation): `max_turns` placed under `[agent]` TOML section
+
+Previously `max_turns` was the only top-level key in config.toml (no `[]` section). Moved under `[agent]`:
+
+```toml
+[agent]
+max_turns = 50
+```
+
+Updated parsing (`config.ts` reads `parsed.agent.max_turns`), default generation (`generateDefaultConfig`), and key-merge logic (`getMissingKeys`). Removed the `globalDefaults` concept from `getMissingKeys` — all config keys now live in a section. Removed debug `console.log` statements from config.ts.
 
 ## Risks
 
-- **[Risk] Cached config stale if user edits config.toml mid-session.** Mitigation: user must restart app or reload project to pick up new config. This is actually *better* than per-message re-read (which creates variable behavior within a conversation). Phase 1 design noted this should be explicit; this fix makes it explicit.
-
-- **[Risk] `bulkInsertMessages` introduces untested codepath for import.** Mitigation: import is already manually tested (Phase 1 9.x verification implicitly covers it). The new function has the same SQL shape as the old inline INSERT.
+- **[Risk] Cached config stale if user edits config.toml mid-session.** Same as before.
+- **[Risk] Old config.toml files with top-level `max_turns` are silently ignored.** The parser only reads `[agent].max_turns`. Users with existing config.toml files must move `max_turns = 50` under `[agent]`. Running `/config` built-in command regenerates with new format.

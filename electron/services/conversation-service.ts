@@ -7,13 +7,12 @@ import {
   getConversation,
   setConversationTrustMode,
 } from "../db/conversations";
-import { listMessages } from "../db/messages";
+import { listMessages, bulkInsertMessages } from "../db/messages";
 import { getProject } from "../db/projects";
-import { getDb } from "../db/connection";
 import { getConversationSkillNames, saveConversationSkill, deleteConversationSkills } from "../db/skills";
 import { UndoService } from "./undo-service";
 import { conversationRegistry } from "./conversation-registry";
-import { ConversationExport, Conversation, ToolCall } from "../../shared/types";
+import { ConversationExport, Conversation } from "../../shared/types";
 
 export function listProjectConversations(projectId: string) {
   return listConversations(projectId);
@@ -132,33 +131,18 @@ export async function importConversationFromFile(projectId: string, filePath: st
     }
   }
 
-  const db = getDb();
-
-  const insert = db.prepare(
-    "INSERT INTO messages (id, conv_id, role, content, reasoning_content, tool_calls, tool_call_id, is_error, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  bulkInsertMessages(
+    conv.id,
+    (data.conversation.messages || []).map((msg) => ({
+      role: msg.role,
+      content: msg.content,
+      reasoningContent: msg.reasoningContent,
+      toolCalls: Array.isArray(msg.toolCalls) ? msg.toolCalls : null,
+      toolCallId: msg.toolCallId,
+      isError: !!(msg as { isError?: boolean }).isError,
+      createdAt: msg.timestamp ? new Date(msg.timestamp).getTime() : undefined,
+    }))
   );
 
-  const { v4: uuidv4 } = await import("uuid");
-
-  const insertMany = db.transaction(() => {
-    for (const msg of data.conversation!.messages!) {
-      const id = uuidv4();
-      const toolCalls = Array.isArray(msg.toolCalls) ? (msg.toolCalls as ToolCall[]) : null;
-      const normalizedToolCalls = toolCalls && toolCalls.length > 0 ? toolCalls : null;
-      insert.run(
-        id,
-        conv.id,
-        msg.role,
-        msg.content,
-        msg.reasoningContent || "",
-        normalizedToolCalls ? JSON.stringify(normalizedToolCalls) : null,
-        msg.toolCallId || null,
-        msg.isError ? 1 : 0,
-        msg.timestamp ? new Date(msg.timestamp).getTime() : Date.now()
-      );
-    }
-  });
-
-  insertMany();
   return conv;
 }

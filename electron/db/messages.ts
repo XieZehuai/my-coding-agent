@@ -3,6 +3,16 @@ import { Message, ToolCall } from "../../shared/types";
 import { touchConversation } from "./conversations";
 import { v4 as uuidv4 } from "uuid";
 
+interface ImportMessage {
+  role: string;
+  content: string;
+  reasoningContent?: string;
+  toolCalls?: ToolCall[] | null;
+  toolCallId?: string | null;
+  isError?: boolean;
+  createdAt?: number;
+}
+
 function parseStoredToolCalls(value: string | null): ToolCall[] | null {
   if (!value) return null;
   const toolCalls = JSON.parse(value) as ToolCall[];
@@ -113,6 +123,7 @@ export function saveToolMessage(convId: string, content: string, toolCallId: str
   db.prepare(
     "INSERT INTO messages (id, conv_id, role, content, reasoning_content, tool_call_id, is_error, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
   ).run(id, convId, "tool", content, "", toolCallId, isError ? 1 : 0, now);
+  touchConversation(convId);
   return {
     id,
     convId,
@@ -139,4 +150,33 @@ export function countMessages(convId: string): number {
   const db = getDb();
   const row = db.prepare("SELECT COUNT(*) as count FROM messages WHERE conv_id = ?").get(convId) as { count: number };
   return row.count;
+}
+
+export function bulkInsertMessages(convId: string, msgs: ImportMessage[]): void {
+  const db = getDb();
+  const insert = db.prepare(
+    "INSERT INTO messages (id, conv_id, role, content, reasoning_content, tool_calls, tool_call_id, is_error, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+  );
+
+  const insertMany = db.transaction(() => {
+    for (const msg of msgs) {
+      const id = uuidv4();
+      const toolCalls = Array.isArray(msg.toolCalls) ? (msg.toolCalls as ToolCall[]) : null;
+      const normalizedToolCalls = toolCalls && toolCalls.length > 0 ? toolCalls : null;
+      insert.run(
+        id,
+        convId,
+        msg.role,
+        msg.content,
+        msg.reasoningContent || "",
+        normalizedToolCalls ? JSON.stringify(normalizedToolCalls) : null,
+        msg.toolCallId || null,
+        msg.isError ? 1 : 0,
+        msg.createdAt || Date.now()
+      );
+    }
+  });
+
+  insertMany();
+  touchConversation(convId);
 }

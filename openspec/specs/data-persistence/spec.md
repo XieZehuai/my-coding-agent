@@ -123,3 +123,21 @@ The system SHALL restore `trustMode` and `skills` when importing a v2 conversati
 #### Scenario: Import v1 without trust mode and skills
 - **WHEN** user imports a v1 conversation JSON without `trustMode` or `skills` fields
 - **THEN** the new conversation SHALL have trust mode disabled and no tracked skills
+
+### Requirement: Tool messages update conversation timestamp
+
+The `saveToolMessage` function SHALL call `touchConversation(convId)` after inserting the tool message row, consistent with `saveUserMessage` and `saveAssistantMessage`, so that conversation activity tracking is uniform across all message types.
+
+#### Scenario: Tool message touches conversation
+
+- **WHEN** a tool message is saved via `saveToolMessage(convId, content, toolCallId, isError)`
+- **THEN** the conversation's `updated_at` column SHALL be updated to the current timestamp
+
+### Requirement: Conversation import routes through db layer
+
+The `importConversationFromFile` function SHALL use `bulkInsertMessages` from `db/messages.ts` to insert imported messages rather than writing raw SQL. The `bulkInsertMessages` function SHALL handle ID generation, tool call normalization, `is_error` column, and transaction wrapping.
+
+#### Scenario: Import uses db layer API
+
+- **WHEN** a conversation is imported from a JSON file
+- **THEN** message insertion SHALL occur via `bulkInsertMessages(convId, messages)`, and the service layer SHALL NOT contain SQL strings
