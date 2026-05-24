@@ -20,6 +20,7 @@ export interface Message {
   reasoningContent: string;
   toolCalls: ToolCall[] | null;
   toolCallId: string | null;
+  isError: boolean;
   createdAt: number;
 }
 
@@ -171,6 +172,7 @@ export interface ExportMessage {
   reasoningContent: string;
   toolCalls: ToolCall[] | null;
   toolCallId: string | null;
+  isError?: boolean;
   timestamp: string;
 }
 

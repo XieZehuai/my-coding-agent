@@ -226,7 +226,7 @@ export class AgentLoop {
       this.ctx.pendingTools.shift();
       const errMsg = `Permission denied for ${toolName}`;
       emitToRenderer(IPC.EVENT_TOOL_ERROR, { convId: this.ctx.convId, toolCallId: tcId, error: errMsg });
-      saveToolMessage(this.ctx.convId, errMsg, tcId);
+      saveToolMessage(this.ctx.convId, errMsg, tcId, true);
       this.ctx.messages.push({ role: "tool", content: errMsg, tool_call_id: tcId });
       return;
     }
@@ -268,7 +268,7 @@ export class AgentLoop {
     if (!approved) {
       const errMsg = `User denied permission for ${tool.function.name}`;
       emitToRenderer(IPC.EVENT_TOOL_ERROR, { convId: this.ctx.convId, toolCallId: askId, error: errMsg });
-      saveToolMessage(this.ctx.convId, errMsg, askId);
+      saveToolMessage(this.ctx.convId, errMsg, askId, true);
       this.ctx.messages.push({ role: "tool", content: errMsg, tool_call_id: askId });
     } else {
       const parsed = parseToolArguments(tool.function.arguments);
@@ -319,7 +319,7 @@ export class AgentLoop {
       emitToRenderer(IPC.EVENT_TOOL_END, { convId: this.ctx.convId, toolCallId: tcId, result: displayContent });
     }
 
-    saveToolMessage(this.ctx.convId, messageContent, tcId);
+    saveToolMessage(this.ctx.convId, messageContent, tcId, !!result.error);
     this.ctx.messages.push({ role: "tool", content: messageContent, tool_call_id: tcId });
   }
 
@@ -335,7 +335,7 @@ export class AgentLoop {
     });
 
     emitToRenderer(IPC.EVENT_TOOL_ERROR, { convId: this.ctx.convId, toolCallId: tcId, error });
-    saveToolMessage(this.ctx.convId, content, tcId);
+    saveToolMessage(this.ctx.convId, content, tcId, true);
     this.ctx.messages.push({ role: "tool", content, tool_call_id: tcId });
   }
 

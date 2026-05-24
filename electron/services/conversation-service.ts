@@ -78,6 +78,7 @@ export function buildExportData(convId: string): ConversationExport {
         reasoningContent: m.reasoningContent,
         toolCalls: m.toolCalls,
         toolCallId: m.toolCallId,
+        isError: m.isError || undefined,
         timestamp: new Date(m.createdAt).toISOString(),
       })),
     },
@@ -99,6 +100,7 @@ export async function importConversationFromFile(projectId: string, filePath: st
         reasoningContent?: string;
         toolCalls?: unknown;
         toolCallId?: string | null;
+        isError?: boolean;
         timestamp?: string;
       }>;
     };
@@ -128,7 +130,7 @@ export async function importConversationFromFile(projectId: string, filePath: st
   const db = getDb();
 
   const insert = db.prepare(
-    "INSERT INTO messages (id, conv_id, role, content, reasoning_content, tool_calls, tool_call_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    "INSERT INTO messages (id, conv_id, role, content, reasoning_content, tool_calls, tool_call_id, is_error, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
   );
 
   const { v4: uuidv4 } = await import("uuid");
@@ -146,6 +148,7 @@ export async function importConversationFromFile(projectId: string, filePath: st
         msg.reasoningContent || "",
         normalizedToolCalls ? JSON.stringify(normalizedToolCalls) : null,
         msg.toolCallId || null,
+        msg.isError ? 1 : 0,
         msg.timestamp ? new Date(msg.timestamp).getTime() : Date.now()
       );
     }

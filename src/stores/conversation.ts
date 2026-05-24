@@ -68,7 +68,7 @@ export const useConversationStore = defineStore("conversation", () => {
 
   function updateTitle(id: string, title: string) {
     const conv = conversations.value.find((c) => c.id === id);
-    if (conv && conv.title === "未命名") {
+    if (conv) {
       conv.title = title;
     }
   }

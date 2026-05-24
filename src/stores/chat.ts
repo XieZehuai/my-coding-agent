@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { ref, computed } from "vue";
-import type { Message, AgentState } from "@shared/types";
+import type { Message, AgentState, ToolCall } from "@shared/types";
 
 export interface AskInfo {
   askId: string;
@@ -161,13 +161,29 @@ export const useChatStore = defineStore("chat", () => {
 
   function mergeMessages(raw: Message[]): DisplayMessage[] {
     const result: DisplayMessage[] = [];
-    const toolResults = new Map<string, string>();
+    const toolResults = new Map<string, { content: string; isError: boolean }>();
 
     raw
       .filter((msg) => msg.role === "tool")
       .forEach((msg) => {
-        toolResults.set(msg.toolCallId || "", msg.content);
+        toolResults.set(msg.toolCallId || "", { content: msg.content, isError: msg.isError });
       });
+
+    function toolCallSegment(tc: ToolCall): ToolSegment {
+      const entry = toolResults.get(tc.id);
+      const isError = entry?.isError ?? false;
+      return {
+        type: "tool_call",
+        toolCall: {
+          id: tc.id,
+          name: tc.function.name,
+          args: tc.function.arguments,
+          result: entry && !isError ? entry.content : undefined,
+          error: entry && isError ? entry.content : undefined,
+          status: isError ? "error" : "done",
+        },
+      };
+    }
 
     for (const msg of raw) {
       if (msg.role === "tool") {
@@ -193,17 +209,7 @@ export const useChatStore = defineStore("chat", () => {
           // Append tool call segments
           if (msg.toolCalls) {
             for (const tc of msg.toolCalls) {
-              const toolResult = toolResults.get(tc.id);
-              last.segments.push({
-                type: "tool_call",
-                toolCall: {
-                  id: tc.id,
-                  name: tc.function.name,
-                  args: tc.function.arguments,
-                  result: toolResult || undefined,
-                  status: "done",
-                },
-              });
+              last.segments.push(toolCallSegment(tc));
             }
           }
           continue;
@@ -220,17 +226,7 @@ export const useChatStore = defineStore("chat", () => {
       }
       if (msg.toolCalls) {
         for (const tc of msg.toolCalls) {
-          const toolResult = toolResults.get(tc.id);
-          segments.push({
-            type: "tool_call",
-            toolCall: {
-              id: tc.id,
-              name: tc.function.name,
-              args: tc.function.arguments,
-              result: toolResult || undefined,
-              status: "done",
-            },
-          });
+          segments.push(toolCallSegment(tc));
         }
       }
 

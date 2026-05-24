@@ -43,6 +43,7 @@ function initSchema(db: Database.Database) {
       reasoning_content TEXT NOT NULL DEFAULT '',
       tool_calls TEXT,
       tool_call_id TEXT,
+      is_error INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL,
       FOREIGN KEY (conv_id) REFERENCES conversations(id) ON DELETE CASCADE
     );
@@ -67,6 +68,11 @@ function initSchema(db: Database.Database) {
   }
   try {
     db.exec("ALTER TABLE conversations ADD COLUMN trust_mode INTEGER NOT NULL DEFAULT 0");
+  } catch {
+    // column already exists
+  }
+  try {
+    db.exec("ALTER TABLE messages ADD COLUMN is_error INTEGER NOT NULL DEFAULT 0");
   } catch {
     // column already exists
   }
